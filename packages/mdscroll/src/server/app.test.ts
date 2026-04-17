@@ -1,3 +1,4 @@
+import type { Hono } from 'hono';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { Store } from '../store/state.js';
 import { createApp } from './app.js';
@@ -64,35 +65,51 @@ describe('createApp', () => {
   });
 
   describe('POST /push', () => {
+    const push = (app: Hono, body: string, source = 'test') =>
+      app.request('/push', {
+        method: 'POST',
+        body,
+        headers: { 'X-Mdscroll-Source': source },
+      });
+
     it('appends a new snapshot to the store', async () => {
       const store = new Store();
       const app = createApp(store);
-      await app.request('/push', { method: 'POST', body: '# Pushed' });
+      await push(app, '# Pushed');
       expect(store.current()?.markdown).toBe('# Pushed');
     });
 
     it('uses X-Mdscroll-Source header as the snapshot source', async () => {
       const store = new Store();
       const app = createApp(store);
-      await app.request('/push', {
-        method: 'POST',
-        body: 'hi',
-        headers: { 'X-Mdscroll-Source': 'plan.md' },
-      });
+      await push(app, 'hi', 'plan.md');
       expect(store.current()?.source).toBe('plan.md');
     });
 
-    it('defaults source to "unknown" when no header is provided', async () => {
+    it('rejects requests without the X-Mdscroll-Source header with 400', async () => {
       const store = new Store();
       const app = createApp(store);
-      await app.request('/push', { method: 'POST', body: 'hi' });
-      expect(store.current()?.source).toBe('unknown');
+      const res = await app.request('/push', { method: 'POST', body: 'hi' });
+      expect(res.status).toBe(400);
+      expect(store.current()).toBeNull();
+    });
+
+    it('rejects requests with an empty source header with 400', async () => {
+      const store = new Store();
+      const app = createApp(store);
+      const res = await app.request('/push', {
+        method: 'POST',
+        body: 'hi',
+        headers: { 'X-Mdscroll-Source': '' },
+      });
+      expect(res.status).toBe(400);
+      expect(store.current()).toBeNull();
     });
 
     it('returns the new snapshot id', async () => {
       const store = new Store();
       const app = createApp(store);
-      const res = await app.request('/push', { method: 'POST', body: 'a' });
+      const res = await push(app, 'a');
       const json = (await res.json()) as { ok: boolean; id: string };
       expect(json.ok).toBe(true);
       expect(typeof json.id).toBe('string');
@@ -101,10 +118,19 @@ describe('createApp', () => {
     it('keeps history newest-first across multiple pushes', async () => {
       const store = new Store();
       const app = createApp(store);
-      await app.request('/push', { method: 'POST', body: 'a' });
-      await app.request('/push', { method: 'POST', body: 'b' });
-      await app.request('/push', { method: 'POST', body: 'c' });
+      await push(app, 'a');
+      await push(app, 'b');
+      await push(app, 'c');
       expect(store.history().map((s) => s.markdown)).toEqual(['c', 'b', 'a']);
+    });
+
+    it('rejects payloads larger than 5 MiB with 413', async () => {
+      const store = new Store();
+      const app = createApp(store);
+      const big = 'x'.repeat(5 * 1024 * 1024 + 1);
+      const res = await push(app, big);
+      expect(res.status).toBe(413);
+      expect(store.current()).toBeNull();
     });
   });
 

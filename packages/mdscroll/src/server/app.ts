@@ -58,9 +58,33 @@ export const createApp = (store: Store, options: CreateAppOptions = {}): Hono =>
     return c.body(CLIENT_JS);
   });
 
+  // Upper bound on a single push. 5 MiB comfortably fits a long plan
+  // with embedded diagrams while making bulk DoS noticeably harder.
+  const MAX_PUSH_BYTES = 5 * 1024 * 1024;
+
   app.post('/push', async (c) => {
+    // CSRF guard: require the custom header we set in commands/push.ts.
+    // Browsers cannot send custom headers cross-origin without a CORS
+    // preflight, and we never answer preflights, so a random webpage
+    // cannot forge a push against localhost:4977.
+    const source = c.req.header('X-Mdscroll-Source');
+    if (typeof source !== 'string' || source.length === 0) {
+      return c.json({ error: 'X-Mdscroll-Source header is required' }, { status: 400 });
+    }
+
+    const declared = c.req.header('content-length');
+    if (declared !== undefined) {
+      const declaredLen = Number(declared);
+      if (!Number.isFinite(declaredLen) || declaredLen > MAX_PUSH_BYTES) {
+        return c.json({ error: 'payload too large' }, { status: 413 });
+      }
+    }
+
     const body = await c.req.text();
-    const source = c.req.header('X-Mdscroll-Source') ?? 'unknown';
+    if (Buffer.byteLength(body, 'utf-8') > MAX_PUSH_BYTES) {
+      return c.json({ error: 'payload too large' }, { status: 413 });
+    }
+
     const snapshot = store.push(body, source);
     return c.json({ ok: true, id: snapshot.id });
   });
