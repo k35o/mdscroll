@@ -113,6 +113,10 @@ Mermaid renders client-side from CDN the first time a diagram appears, then re-r
 
 - `html: false` — raw HTML in input is escaped, not passed through.
 - Dangerous URL schemes (e.g. `javascript:`) are rejected by markdown-it's default validator.
+- `POST /push` requires the `X-Mdscroll-Source` header. Browsers cannot send custom headers cross-origin without a CORS preflight that mdscroll never answers, so a random webpage you visit cannot inject content into the preview.
+- Pushes are capped at 5 MiB.
+- The served HTML sets a strict `Content-Security-Policy`. The only remote origin allowed is `cdn.jsdelivr.net`, used solely to lazy-load a pinned version of Mermaid (`mermaid@11.14.0`). If you don't want that network call at all, don't include Mermaid diagrams in your Markdown or block the domain in your browser.
+- `stop` fetches `/identity` and refuses to SIGTERM if the running server can't prove it's the same instance that wrote the lockfile — guards against pid recycling.
 - The server binds to `127.0.0.1` by default. Override with `--host` only if you understand the exposure.
 
 ## Agent integration

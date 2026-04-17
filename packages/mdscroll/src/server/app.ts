@@ -40,9 +40,30 @@ export const createApp = (store: Store, options: CreateAppOptions = {}): Hono =>
     return c.json({ identity: identity ?? '' });
   });
 
+  // Content-Security-Policy for the HTML document. Restricts where the
+  // page can load scripts, styles, connections, etc. The one remote
+  // origin we allow is cdn.jsdelivr.net because Mermaid is loaded from
+  // there via dynamic import; everything else must be same-origin.
+  const CSP = [
+    "default-src 'self'",
+    // Mermaid ESM is fetched from cdn.jsdelivr.net at a pinned version.
+    "script-src 'self' https://cdn.jsdelivr.net",
+    // Inline styles used by Shiki tokens.
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data:",
+    "font-src 'self'",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+  ].join('; ');
+
   app.get('/', async (c) => {
     const html = await renderCurrent(store.current());
     const page = INDEX_HTML.replace('{{CONTENT}}', html);
+    c.header('Content-Security-Policy', CSP);
+    c.header('X-Content-Type-Options', 'nosniff');
+    c.header('Referrer-Policy', 'no-referrer');
     return c.html(page);
   });
 
