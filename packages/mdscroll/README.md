@@ -39,7 +39,7 @@ pnpm add -g mdscroll
 - Push history (last 20) accessible from a right-side drawer; click to view a past snapshot
 - Named instances (`--name`) for working on more than one document in parallel
 - Auto-spawn: `mdscroll push` starts the server if it isn't already running
-- Idempotent start: running `mdscroll` when a server is already up just opens the browser
+- Idempotent start: running `mdscroll` when a server is already up just re-prints the URL
 
 ## Usage
 
