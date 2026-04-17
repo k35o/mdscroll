@@ -1,0 +1,64 @@
+{
+  "name": "mdscroll",
+  "version": "0.1.0",
+  "description": "Push markdown content to a local browser preview, instantly. Built for AI workflows.",
+  "keywords": [
+    "ai",
+    "claude",
+    "cli",
+    "live",
+    "markdown",
+    "preview",
+    "server"
+  ],
+  "homepage": "https://github.com/k35o/mdscroll#readme",
+  "bugs": {
+    "url": "https://github.com/k35o/mdscroll/issues"
+  },
+  "license": "MIT",
+  "author": "k8o <kosakanoki@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/k35o/mdscroll.git",
+    "directory": "packages/mdscroll"
+  },
+  "bin": {
+    "mdscroll": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist/**"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "scripts": {
+    "build": "vp pack",
+    "dev": "vp pack --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "check": "vp check",
+    "check:write": "vp check --fix"
+  },
+  "dependencies": {
+    "@hono/node-server": "catalog:",
+    "commander": "catalog:",
+    "get-port": "catalog:",
+    "hono": "catalog:",
+    "markdown-it": "catalog:",
+    "open": "catalog:",
+    "shiki": "catalog:"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

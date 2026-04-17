@@ -1,0 +1,28 @@
+{
+  "name": "mdscroll-monorepo",
+  "private": true,
+  "description": "Monorepo for mdscroll: push markdown to a local browser preview, instantly.",
+  "license": "MIT",
+  "author": "k8o",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/k35o/mdscroll.git"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "vp run -r build",
+    "test": "vp run -r test",
+    "typecheck": "vp run -r typecheck",
+    "check": "vp check",
+    "check:write": "vp check --fix"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": ">=24.13.0"
+  },
+  "packageManager": "pnpm@10.33.0"
+}
