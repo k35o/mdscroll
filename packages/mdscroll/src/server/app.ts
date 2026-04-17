@@ -25,8 +25,20 @@ export type ServerHandle = {
 const renderCurrent = (current: Snapshot | null): Promise<string> =>
   render(current?.markdown ?? EMPTY_PLACEHOLDER);
 
-export const createApp = (store: Store): Hono => {
+export type CreateAppOptions = {
+  identity?: string | undefined;
+};
+
+export const createApp = (store: Store, options: CreateAppOptions = {}): Hono => {
   const app = new Hono();
+  const identity = options.identity;
+
+  app.get('/identity', (c) => {
+    // Returned so `mdscroll stop` can prove this server is ours before
+    // sending SIGTERM. Empty when the caller never set one (e.g. in
+    // tests), and that case is treated as "can't verify".
+    return c.json({ identity: identity ?? '' });
+  });
 
   app.get('/', async (c) => {
     const html = await renderCurrent(store.current());
@@ -100,9 +112,13 @@ export const createApp = (store: Store): Hono => {
   return app;
 };
 
-export const startServer = async (opts: { port: number; host: string }): Promise<ServerHandle> => {
+export const startServer = async (opts: {
+  port: number;
+  host: string;
+  identity?: string | undefined;
+}): Promise<ServerHandle> => {
   const store = new Store();
-  const app = createApp(store);
+  const app = createApp(store, { identity: opts.identity });
 
   const server: ServerType = serve({
     fetch: app.fetch,

@@ -1,7 +1,13 @@
 import { resolvePort } from '../port.js';
 import { startServer } from '../server/app.js';
 import { warmup } from '../server/render.js';
-import { DEFAULT_INSTANCE_NAME, readLock, removeLock, writeLock } from '../store/lockfile.js';
+import {
+  DEFAULT_INSTANCE_NAME,
+  newIdentity,
+  readLock,
+  removeLock,
+  writeLock,
+} from '../store/lockfile.js';
 
 export type StartOptions = {
   name?: string | undefined;
@@ -21,8 +27,9 @@ export const runStart = async (opts: StartOptions): Promise<void> => {
 
   await warmup();
 
+  const identity = newIdentity();
   const port = await resolvePort(opts.port);
-  const handle = await startServer({ port, host: opts.host });
+  const handle = await startServer({ port, host: opts.host, identity });
 
   await writeLock({
     name,
@@ -30,6 +37,7 @@ export const runStart = async (opts: StartOptions): Promise<void> => {
     port,
     host: opts.host,
     startedAt: Date.now(),
+    identity,
   });
 
   process.stdout.write(`mdscroll[${name}] running at ${handle.url}\n`);

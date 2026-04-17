@@ -2,7 +2,15 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_INSTANCE_NAME, listLocks, readLock, removeLock, writeLock } from './lockfile.js';
+import {
+  DEFAULT_INSTANCE_NAME,
+  listLocks,
+  newIdentity,
+  readLock,
+  removeLock,
+  writeLock,
+  writeLockExclusive,
+} from './lockfile.js';
 
 describe('lockfile', () => {
   let dir: string;
@@ -13,6 +21,7 @@ describe('lockfile', () => {
     port: 1234,
     host: '127.0.0.1',
     startedAt: 1000,
+    identity: 'test-identity',
     ...overrides,
   });
 
@@ -122,6 +131,49 @@ describe('lockfile', () => {
       const result = await listLocks(dir);
       const names = result.map((l) => l.name);
       expect(names).toEqual(['alive']);
+    });
+  });
+
+  describe('validation', () => {
+    it('rejects a write with pid <= 0', async () => {
+      await expect(writeLock(baseLock({ pid: 0 }), dir)).rejects.toThrow(/invalid lock/);
+      await expect(writeLock(baseLock({ pid: -1 }), dir)).rejects.toThrow(/invalid lock/);
+    });
+
+    it('rejects a write with out-of-range port', async () => {
+      await expect(writeLock(baseLock({ port: 0 }), dir)).rejects.toThrow(/invalid lock/);
+      await expect(writeLock(baseLock({ port: 70000 }), dir)).rejects.toThrow(/invalid lock/);
+    });
+
+    it('drops a corrupt lockfile and returns null', async () => {
+      await writeFile(join(dir, 'default.lock'), JSON.stringify({ pid: 0 }));
+      const result = await readLock(DEFAULT_INSTANCE_NAME, dir);
+      expect(result).toBeNull();
+      // It was also cleared from disk
+      expect(await readLock(DEFAULT_INSTANCE_NAME, dir)).toBeNull();
+    });
+  });
+
+  describe('writeLockExclusive', () => {
+    it('returns true when no lock exists', async () => {
+      const ok = await writeLockExclusive(baseLock(), dir);
+      expect(ok).toBe(true);
+    });
+
+    it('returns false when a lock already exists', async () => {
+      await writeLock(baseLock(), dir);
+      const ok = await writeLockExclusive(baseLock({ pid: 12345 }), dir);
+      expect(ok).toBe(false);
+    });
+  });
+
+  describe('newIdentity', () => {
+    it('produces unique non-empty strings', () => {
+      const a = newIdentity();
+      const b = newIdentity();
+      expect(a).toBeTypeOf('string');
+      expect(a.length).toBeGreaterThan(0);
+      expect(a).not.toBe(b);
     });
   });
 });

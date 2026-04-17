@@ -36,6 +36,7 @@ describe('runList', () => {
         port: 5001,
         host: '127.0.0.1',
         startedAt: Date.now(),
+        identity: 'test-identity',
       },
       dir,
     );
@@ -46,6 +47,7 @@ describe('runList', () => {
         port: 5002,
         host: '127.0.0.1',
         startedAt: Date.now(),
+        identity: 'test-identity',
       },
       dir,
     );
@@ -66,6 +68,7 @@ describe('runList', () => {
         port: 5001,
         host: '127.0.0.1',
         startedAt: Date.now(),
+        identity: 'test-identity',
       },
       dir,
     );
@@ -76,6 +79,7 @@ describe('runList', () => {
         port: 5002,
         host: '127.0.0.1',
         startedAt: Date.now(),
+        identity: 'test-identity',
       },
       dir,
     );
