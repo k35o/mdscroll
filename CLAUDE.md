@@ -88,12 +88,35 @@ pnpm -F mdscroll dev      # vp pack --watch
 
 ## Release
 
-Versioning and publishing use [Changesets](https://github.com/changesets/changesets).
+Versioning and publishing use [Changesets](https://github.com/changesets/changesets). The default path is CI-driven via `.github/workflows/release.yml`.
+
+### Authoring a change
 
 ```bash
-pnpm changeset       # record the change (interactive; writes .changeset/<name>.md)
-pnpm version         # bumps package.json + CHANGELOG based on pending changesets
-pnpm release         # pnpm build && changeset publish (to npm)
+pnpm changeset        # interactive; writes .changeset/<name>.md describing the change
+git add .changeset/*  # include it in the PR
 ```
 
-Config: `.changeset/config.json` uses `@changesets/changelog-github` (repo `k35o/mdscroll`) and `access: public`. Baseline branch is `main`.
+### CI-driven publish (normal path)
+
+On every push to `main`, `changesets/action` runs. It does one of two things:
+
+1. If there are pending `.changeset/*.md` files → it opens or updates a `Version Packages` PR that bumps `package.json` versions and updates `CHANGELOG.md`.
+2. If that PR has been merged (no pending changesets, but versions differ from what is on npm) → it runs `pnpm release` (build + `changeset publish`) and pushes the new version to npm.
+
+Publishing uses npm OIDC (trusted publishing). The workflow requests `id-token: write` — no `NPM_TOKEN` secret is needed. The trusted publisher must be configured on npmjs.com for the `mdscroll` package, bound to the GitHub repo and the `Release` workflow.
+
+### First publish (manual)
+
+OIDC trusted publishing requires the package to exist on npm before the CI path works. For the very first release:
+
+```bash
+npm login
+pnpm release         # builds + changeset publish (runs locally)
+```
+
+Then configure the trusted publisher on npmjs.com → `mdscroll` package → "Trusted publisher" → GitHub Actions → repo `k35o/mdscroll`, workflow `release.yml`, environment (blank).
+
+### Config
+
+`.changeset/config.json` uses `@changesets/changelog-github` (repo `k35o/mdscroll`) and `access: public`. Baseline branch is `main`.

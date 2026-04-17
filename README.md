@@ -59,11 +59,11 @@ mdscroll/
 
 ## Release
 
-```bash
-pnpm changeset       # record a change
-pnpm version         # apply pending changesets (bumps versions + CHANGELOG)
-pnpm release         # build + publish to npm
-```
+1. Author a change with `pnpm changeset`, commit the generated `.changeset/*.md` in the PR.
+2. Merge the PR. CI opens / updates a `Version Packages` PR.
+3. Merge the `Version Packages` PR. CI publishes to npm via OIDC.
+
+See [`CLAUDE.md`](./CLAUDE.md#release) for the first-publish bootstrap and trusted-publisher setup.
 
 ## License
 
