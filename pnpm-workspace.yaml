@@ -9,7 +9,7 @@ catalog:
   '@types/node': 24.12.2
   commander: 14.0.3
   get-port: 7.2.0
-  hono: 4.12.12
+  hono: 4.12.14
   markdown-it: 14.1.1
   markdown-it-github-alerts: 1.0.1
   markdown-it-task-lists: 2.1.1
@@ -22,3 +22,6 @@ catalog:
 blockExoticSubdeps: true
 minimumReleaseAge: 10080
 verifyDepsBeforeRun: install
+minimumReleaseAgeExclude:
+  # Renovate security update: hono@4.12.14
+  - hono@4.12.14
