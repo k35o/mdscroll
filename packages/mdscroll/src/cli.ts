@@ -10,7 +10,6 @@ type StartCliOptions = {
   name: string;
   port: string;
   host: string;
-  open: boolean;
 };
 
 type PushCliOptions = {
@@ -38,20 +37,18 @@ program
 program
   .command('start', { isDefault: true })
   .description(
-    'Start the local preview server and open the browser. Optionally display a markdown file on startup.',
+    'Start the local preview server and print its URL. Optionally seed it with a markdown file.',
   )
   .argument('[file]', 'Markdown file to display immediately on startup')
   .option('-n, --name <name>', 'Instance name (multiple instances are isolated)', 'default')
   .option('-p, --port <port>', 'Port to listen on', '4977')
   .option('-h, --host <host>', 'Host to bind to', '127.0.0.1')
-  .option('--no-open', 'Do not open the browser automatically')
   .action(async (file: string | undefined, opts: StartCliOptions) => {
     await runStart({
       name: opts.name,
       file,
       port: Number(opts.port),
       host: opts.host,
-      open: opts.open,
     });
   });
 

@@ -41,14 +41,17 @@ rm -f "$TMP"
 \`\`\`
 
 - \`mdscroll push\` auto-spawns the server if it isn't already running
-- To also open the browser, run \`mdscroll\` separately (it's a no-op if already running)
-- Each push **replaces** the previous content — there is no history
+- mdscroll never opens a browser itself — open the printed URL however the host UI prefers (cmux pane, OS browser, etc) and let the user know
+- Push \`stdout\` includes the URL: \`mdscroll[default]: pushed to http://127.0.0.1:4977/push\`
+- The current host/port can also be discovered via \`mdscroll list\`
+- Recent pushes are kept (last 20) and accessible from the History drawer in the browser
 
 ## Steps
 
 1. Assemble the Markdown you want to display
 2. Push it using one of the commands above
-3. If the exit code is 0 and you see \`mdscroll: pushed to ...\`, it worked. Tell the user the content is now in their browser.
+3. If the exit code is 0 and you see \`mdscroll[...]: pushed to <url>\`, it worked
+4. Open the URL in whatever browser surface fits the host environment (e.g. \`cmux browser open-split <url>\` inside cmux), then point the user at it
 
 ## When the command is missing
 

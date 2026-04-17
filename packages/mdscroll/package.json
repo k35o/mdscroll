@@ -50,7 +50,6 @@
     "markdown-it": "catalog:",
     "markdown-it-github-alerts": "catalog:",
     "markdown-it-task-lists": "catalog:",
-    "open": "catalog:",
     "shiki": "catalog:"
   },
   "devDependencies": {

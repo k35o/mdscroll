@@ -8,13 +8,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Surface area:
 
-- `mdscroll [file]` — start server (idempotent, lockfile-guarded). Optional file is shown immediately.
+- `mdscroll [file]` — start server (idempotent, lockfile-guarded). Optional file is shown immediately. **Does not open a browser** — only prints the URL.
 - `mdscroll push [file]` — push a file or stdin to the running server. Auto-spawns if needed.
 - `mdscroll stop` — SIGTERM the lockfile pid.
 - `mdscroll list` — table of every alive instance.
 - `mdscroll install-skill` — write the bundled SKILL.md to `~/.claude/skills/`.
 
 Each command (except `install-skill`/`list`) accepts `--name <n>` to scope to an isolated instance (default: `default`). Lockfiles, ports, content, and history are per-name.
+
+Browser opening is intentionally not handled by the CLI. The host environment (system default browser, cmux pane, an AI agent's open-helper, etc) is responsible for navigating to the URL.
 
 ## Architecture
 

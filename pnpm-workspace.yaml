@@ -13,7 +13,6 @@ catalog:
   markdown-it: 14.1.1
   markdown-it-github-alerts: 1.0.1
   markdown-it-task-lists: 2.1.1
-  open: 11.0.0
   shiki: 4.0.2
   typescript: 6.0.2
   vite-plus: 0.1.16

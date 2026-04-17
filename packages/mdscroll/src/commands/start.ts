@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises';
-import open from 'open';
 import { resolvePort } from '../port.js';
 import { startServer } from '../server/app.js';
 import { warmup } from '../server/render.js';
@@ -9,7 +8,6 @@ export type StartOptions = {
   name?: string | undefined;
   port: number;
   host: string;
-  open: boolean;
   file?: string | undefined;
 };
 
@@ -33,7 +31,6 @@ export const runStart = async (opts: StartOptions): Promise<void> => {
       await pushToRunning(existing.host, existing.port, initial);
       process.stdout.write(`mdscroll[${name}]: pushed ${opts.file}\n`);
     }
-    if (opts.open) await open(url);
     return;
   }
 
@@ -56,8 +53,6 @@ export const runStart = async (opts: StartOptions): Promise<void> => {
   }
 
   process.stdout.write(`mdscroll[${name}] running at ${handle.url}\n`);
-
-  if (opts.open) await open(handle.url);
 
   const shutdown = async (): Promise<never> => {
     await removeLock(name);

@@ -41,17 +41,7 @@ const tryPost = async (url: string, body: string, source: string): Promise<boole
 
 const spawnServer = (name: string, port: number, host: string): void => {
   const cliPath = fileURLToPath(import.meta.url);
-  const args = [
-    cliPath,
-    'start',
-    '--no-open',
-    '--name',
-    name,
-    '--host',
-    host,
-    '--port',
-    String(port),
-  ];
+  const args = [cliPath, 'start', '--name', name, '--host', host, '--port', String(port)];
   const child = spawn(process.execPath, args, {
     detached: true,
     stdio: 'ignore',

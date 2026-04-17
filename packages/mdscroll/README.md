@@ -5,13 +5,15 @@ Push markdown to a local browser preview — instantly.
 Pipe AI-generated plans, drafts, or reports into a beautifully rendered live view. Two commands, zero config.
 
 ```bash
-mdscroll                         # start server + open browser (empty preview)
-mdscroll README.md               # start + show this file immediately
-echo "# Hello" | mdscroll push   # browser updates instantly
+mdscroll                         # start server, print URL (no browser)
+mdscroll README.md               # start + seed with this file
+echo "# Hello" | mdscroll push   # update content; open browser updates instantly
 mdscroll push plan.md            # or push a file
 mdscroll list                    # show all running instances
 mdscroll stop                    # stop the running server
 ```
+
+mdscroll never opens a browser by itself. It just listens on a port and prints the URL — open it however your environment likes (system browser, terminal multiplexer pane, AI agent helper, etc).
 
 ## Why
 
@@ -44,14 +46,13 @@ pnpm add -g mdscroll
 ### Start the server
 
 ```bash
-mdscroll                    # starts on 127.0.0.1:4977, opens browser (empty preview)
-mdscroll README.md          # also shows README.md immediately
+mdscroll                    # starts on 127.0.0.1:4977, prints URL
+mdscroll README.md          # seeds the server with README.md
 mdscroll --port 5000        # custom port
 mdscroll --host 0.0.0.0     # bind to all interfaces
-mdscroll --no-open          # don't auto-open the browser
 ```
 
-If a server is already running, `mdscroll` is a no-op (just opens the browser); `mdscroll <file>` pushes that file to the running server.
+If a server is already running, `mdscroll` is a no-op that re-prints the URL; `mdscroll <file>` pushes that file to the running server.
 
 ### Push content
 
@@ -95,7 +96,6 @@ The drawer uses the native [Popover API](https://developer.mozilla.org/en-US/doc
 | `-n, --name <n>` | `default`   | Instance name (lockfile, port, content, and history are per-name)        |
 | `-p, --port <n>` | `4977`      | Port to listen on. If unavailable, falls back to a free port. `0` = auto |
 | `-h, --host <h>` | `127.0.0.1` | Host to bind to                                                          |
-| `--no-open`      | —           | Skip opening the browser (start)                                         |
 
 ## How it works
 
