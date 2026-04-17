@@ -2,51 +2,86 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## What this project is
+## What this is
 
-`mdscroll` is a CLI + lightweight HTTP server that displays Markdown content in a browser, designed for **AI integration**: pipe AI-generated plans/drafts/reports into a beautifully rendered local view, with hot-update via SSE.
+`mdscroll` is a CLI + lightweight HTTP server that displays Markdown in a browser. Built for AI workflows: pipe an AI-generated plan into a live local view that auto-updates via SSE.
 
-The killer flow:
+Two commands:
 
-1. `mdscroll` — start server + open browser (idempotent; no-op if already running)
-2. `mdscroll push <file>` or `... | mdscroll push` — push content; the open browser updates instantly
-
-A Claude Code Skill wraps this so plans show up in the browser the moment they're generated.
+1. `mdscroll` — start server + open browser. Idempotent (lockfile-guarded).
+2. `mdscroll push <file>` or `... | mdscroll push` — update content. Auto-spawns the server if it isn't running.
 
 ## Architecture
 
-- **Monorepo** with pnpm workspaces. Single package for now: `packages/mdscroll`.
-- **Toolchain**: `vite-plus` (`vp`) for build (`vp pack` → tsdown), lint/format (`vp check` → oxlint + oxfmt), and task running (`vp run -r`).
-- **Server**: Hono + `@hono/node-server`. Three routes: `/` (HTML), `/push` (POST), `/events` (SSE).
-- **Renderer**: `markdown-it` for parsing, `shiki` for code highlighting. Mermaid loads client-side via CDN initially.
-- **Auto-spawn**: When `push` runs and no server is up, it spawns one detached and waits briefly before POSTing. Lockfile at `~/.mdscroll/server.lock`.
+Monorepo (pnpm workspaces). One package today: `packages/mdscroll`.
+
+Source layout (`packages/mdscroll/src/`):
+
+| File          | Responsibility                                                                                                                                                          |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cli.ts`      | commander entry. Defines `start` (default) and `push`.                                                                                                                  |
+| `start.ts`    | `runStart`: warm up Shiki, build app, bind port, write lockfile, open browser, handle SIGINT/SIGTERM.                                                                   |
+| `push.ts`     | `runPush`: read file or stdin, POST to `/push`. If no server, spawn detached and retry for ~4.5s.                                                                       |
+| `server.ts`   | `createApp(store)` (testable Hono app) + `startServer(opts)` (binds via `@hono/node-server`). Routes: `/`, `/style.css`, `/main.js`, `POST /push`, `GET /events` (SSE). |
+| `render.ts`   | markdown-it + shiki. Async memoized highlighter. Custom fence rule emits `<pre class="mermaid">` for `mermaid` blocks. Plugins: task lists, GFM alerts.                 |
+| `state.ts`    | In-memory `Store` with versioned snapshots + listener subscriptions.                                                                                                    |
+| `lockfile.ts` | `~/.mdscroll/server.lock` with dead-PID cleanup. `dir` is an optional parameter to keep tests off the real home directory.                                              |
+| `client.ts`   | Inline HTML / CSS / JS the server ships to the browser. Mermaid loads client-side from CDN.                                                                             |
+
+Data flow on push:
+
+```
+CLI push → POST /push → Store.set → listeners → SSE writeSSE → browser swaps #mdscroll-content
+```
 
 ## Commands
 
 ```bash
-pnpm install                  # Install (verifyDepsBeforeRun: install enforces freshness)
-pnpm build                    # Build all packages (vp pack)
-pnpm test                     # Run vitest across packages
-pnpm typecheck                # tsc --noEmit
-pnpm check                    # vp check (oxlint + oxfmt)
-pnpm check:write              # vp check --fix
+pnpm install          # respects minimumReleaseAge (7d), verifyDepsBeforeRun: install
+pnpm build            # vp run -r build (→ vp pack → tsdown → dist/cli.mjs with shebang)
+pnpm test             # vitest (~350ms, 68 tests)
+pnpm typecheck        # tsc --noEmit
+pnpm check            # oxlint + oxfmt
+pnpm check:write      # auto-fix
+```
+
+Single package:
+
+```bash
+pnpm -F mdscroll build
+pnpm -F mdscroll test
+pnpm -F mdscroll dev      # vp pack --watch
 ```
 
 ## Conventions
 
-- **TypeScript**: 6.0.x stable (not native-preview). Strict mode + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`.
-- **ESM only**, `.d.mts` for types.
-- **Single quotes**, no `interface` (use `type`).
-- **`minimumReleaseAge: 10080`** (7 days) on workspace — pin versions in catalog older than 7 days. New deps must wait or be backed off to a 7-day-old release.
-- **Catalog**: All shared deps go in `pnpm-workspace.yaml` `catalog:`. Packages reference them via `"<dep>": "catalog:"`.
+- **TypeScript 6.0 stable** (not native-preview). Strict + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`.
+- **ESM only**, module `NodeNext`. `.js` extension in relative imports.
+- **`type` only** — no `interface`.
+- **Single quotes** (oxfmt).
+- **No emojis** in source or docs unless explicitly requested.
+- **`catalog:`** for every shared dep. New deps must have a version published ≥ 7 days ago (`minimumReleaseAge: 10080`).
+- **Testing philosophy**: see `~/.claude/skills/testing/`. Summary:
+  - AAA (Arrange-Act-Assert) structure
+  - 1 test 1 behavior
+  - Japanese `describe` / `it` names describing behavior, not implementation
+  - Per-test isolation (e.g. `tmpdir` for lockfile tests)
+  - Avoid self-fulfilling assertions (don't recompute the expected in the test)
 
-## Adding a new dependency
+## Adding a dependency
 
-1. Find a version released ≥ 7 days ago (`pnpm view <pkg> time --json`).
+1. Find a version published ≥ 7 days ago (`curl registry.npmjs.org/<pkg>` → inspect `time`).
 2. Add to `pnpm-workspace.yaml` `catalog:`.
-3. Reference as `"catalog:"` in the package's `package.json`.
+3. Reference as `"catalog:"` in the consuming package's `package.json`.
 4. `pnpm install`.
 
-## Publishing
+## Release (not yet wired)
 
-Not yet wired up. Will use Changesets when ready for v0.1.0.
+Changesets will be added before `v0.1.0`:
+
+```
+pnpm changeset         # record the change
+pnpm changeset version # bump + update CHANGELOG
+pnpm build
+pnpm changeset publish # push to npm
+```
