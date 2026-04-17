@@ -1,10 +1,16 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { runList } from './commands/list.js';
 import { runPush } from './commands/push.js';
 import { runStart } from './commands/start.js';
 import { runStop } from './commands/stop.js';
 import { DEFAULT_HOST, DEFAULT_INSTANCE_NAME, DEFAULT_PORT } from './constants.js';
+
+const pkg = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf-8'),
+) as { version: string };
 
 type StartCliOptions = {
   name: string;
@@ -27,7 +33,7 @@ const program = new Command();
 program
   .name('mdscroll')
   .description('Push markdown content to a local browser preview, instantly.')
-  .version('0.1.0');
+  .version(pkg.version);
 
 program
   .command('start', { isDefault: true })
