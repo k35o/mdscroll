@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readLock, writeLock } from '../store/lockfile.js';
+import { DEFAULT_INSTANCE_NAME, readLock, writeLock } from '../store/lockfile.js';
 import { runStop } from './stop.js';
 
 describe('runStop', () => {
@@ -22,17 +22,25 @@ describe('runStop', () => {
 
     await runStop({ dir });
 
-    expect(out).toHaveBeenCalledWith('mdscroll: not running\n');
+    expect(out).toHaveBeenCalledWith(`mdscroll[${DEFAULT_INSTANCE_NAME}]: not running\n`);
     out.mockRestore();
   });
 
   it('clears a stale lockfile (dead pid) and reports not running', async () => {
-    await writeLock({ pid: 999999, port: 1, host: '127.0.0.1', startedAt: 0 }, dir);
+    await writeLock(
+      {
+        name: DEFAULT_INSTANCE_NAME,
+        pid: 999999,
+        port: 1,
+        host: '127.0.0.1',
+        startedAt: 0,
+      },
+      dir,
+    );
 
     await runStop({ dir });
 
-    // readLock auto-cleared the stale lock; runStop saw null and reported "not running"
-    expect(await readLock(dir)).toBeNull();
+    expect(await readLock(DEFAULT_INSTANCE_NAME, dir)).toBeNull();
   });
 
   it('sends SIGTERM to the live pid in the lockfile', async () => {
@@ -41,6 +49,7 @@ describe('runStop', () => {
 
     await writeLock(
       {
+        name: DEFAULT_INSTANCE_NAME,
         pid: child.pid as number,
         port: 1,
         host: '127.0.0.1',
@@ -57,5 +66,41 @@ describe('runStop', () => {
     await exited;
 
     expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+  });
+
+  it('targets the named instance only', async () => {
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)']);
+    expect(child.pid).toBeDefined();
+
+    await writeLock(
+      {
+        name: 'plan',
+        pid: child.pid as number,
+        port: 1,
+        host: '127.0.0.1',
+        startedAt: 0,
+      },
+      dir,
+    );
+    await writeLock(
+      {
+        name: 'review',
+        pid: process.pid,
+        port: 2,
+        host: '127.0.0.1',
+        startedAt: 0,
+      },
+      dir,
+    );
+
+    const exited = new Promise<void>((resolve) => {
+      child.once('exit', () => resolve());
+    });
+
+    await runStop({ name: 'plan', dir });
+    await exited;
+
+    expect(child.exitCode !== null || child.signalCode !== null).toBe(true);
+    expect(await readLock('review', dir)).not.toBeNull();
   });
 });
