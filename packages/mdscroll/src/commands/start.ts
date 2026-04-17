@@ -1,8 +1,8 @@
 import open from 'open';
-import { readLock, removeLock, writeLock } from './lockfile.js';
-import { resolvePort } from './port.js';
-import { warmup } from './render.js';
-import { startServer } from './server.js';
+import { resolvePort } from '../port.js';
+import { startServer } from '../server/app.js';
+import { warmup } from '../server/render.js';
+import { readLock, removeLock, writeLock } from '../store/lockfile.js';
 
 export type StartOptions = {
   port: number;

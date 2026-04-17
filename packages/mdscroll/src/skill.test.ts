@@ -2,8 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { installSkill, resolveSkillPath } from './install-skill.js';
-import { SKILL_MD } from './skill.js';
+import { installSkill, resolveSkillPath, SKILL_MD } from './skill.js';
 
 describe('install-skill', () => {
   let dir: string;

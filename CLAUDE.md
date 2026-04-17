@@ -17,18 +17,26 @@ Monorepo (pnpm workspaces). One package today: `packages/mdscroll`.
 
 Source layout (`packages/mdscroll/src/`):
 
-| File               | Responsibility                                                                                                                                                          |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cli.ts`           | commander entry. Defines `start` (default), `push`, and `install-skill`.                                                                                                |
-| `start.ts`         | `runStart`: warm up Shiki, build app, bind port, write lockfile, open browser, handle SIGINT/SIGTERM.                                                                   |
-| `push.ts`          | `runPush`: read file or stdin, POST to `/push`. If no server, spawn detached and retry for ~4.5s.                                                                       |
-| `server.ts`        | `createApp(store)` (testable Hono app) + `startServer(opts)` (binds via `@hono/node-server`). Routes: `/`, `/style.css`, `/main.js`, `POST /push`, `GET /events` (SSE). |
-| `render.ts`        | markdown-it + shiki. Async memoized highlighter. Custom fence rule emits `<pre class="mermaid">` for `mermaid` blocks. Plugins: task lists, GFM alerts.                 |
-| `state.ts`         | In-memory `Store` with versioned snapshots + listener subscriptions.                                                                                                    |
-| `lockfile.ts`      | `~/.mdscroll/server.lock` with dead-PID cleanup. `dir` is an optional parameter to keep tests off the real home directory.                                              |
-| `client.ts`        | Inline HTML / CSS / JS the server ships to the browser. Mermaid loads client-side from CDN.                                                                             |
-| `skill.ts`         | The SKILL.md content shipped to `~/.claude/skills/mdscroll/` via `install-skill`.                                                                                       |
-| `install-skill.ts` | `installSkill(opts)` writes the skill to disk. `runInstallSkill` is the CLI wrapper.                                                                                    |
+```
+src/
+├── cli.ts                     # commander entry; wires up every command
+├── port.ts                    # resolvePort (get-port) — prefer requested, fall back to free
+├── skill.ts                   # SKILL_MD + installSkill/resolveSkillPath (core)
+├── types.d.ts                 # ambient types (untyped markdown-it-task-lists)
+├── commands/                  # runX functions — one per CLI command
+│   ├── start.ts               # warm Shiki, bind, write lockfile, open browser
+│   ├── push.ts                # POST /push; auto-spawn + poll lockfile for port
+│   └── install-skill.ts       # thin CLI wrapper around installSkill
+├── server/                    # HTTP + rendering + browser assets
+│   ├── app.ts                 # createApp(store) (testable) + startServer(opts)
+│   ├── render.ts              # markdown-it + shiki + mermaid fence + GFM plugins
+│   └── client.ts              # inline HTML / CSS / JS for the browser
+└── store/                     # shared in-process state and on-disk persistence
+    ├── state.ts               # in-memory Store with versioned snapshots + listeners
+    └── lockfile.ts            # ~/.mdscroll/server.lock with dead-PID cleanup
+```
+
+Tests live alongside their source (`*.test.ts`).
 
 Data flow on push:
 

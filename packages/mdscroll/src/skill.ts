@@ -1,3 +1,7 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
 export const SKILL_MD = `---
 name: mdscroll
 description: Preview generated Markdown (plans, design notes, reviews, research reports) in the user's browser. Use when sharing long, structured output — documents with headings, tables, code blocks, or Mermaid diagrams — that is hard to read in the terminal.
@@ -60,5 +64,25 @@ pnpm add -g mdscroll   # or: npm i -g mdscroll
 - Override: \`mdscroll push --port 5000 --host 0.0.0.0 <file>\`
 `;
 
-export const SKILL_FILENAME = 'SKILL.md';
-export const DEFAULT_SKILL_NAME = 'mdscroll';
+const SKILL_FILENAME = 'SKILL.md';
+const DEFAULT_SKILL_NAME = 'mdscroll';
+
+const defaultDir = (): string => join(homedir(), '.claude', 'skills');
+
+export type InstallSkillOptions = {
+  dir?: string | undefined;
+  name?: string | undefined;
+};
+
+export const resolveSkillPath = (opts: InstallSkillOptions = {}): string => {
+  const dir = opts.dir ?? defaultDir();
+  const name = opts.name ?? DEFAULT_SKILL_NAME;
+  return join(dir, name, SKILL_FILENAME);
+};
+
+export const installSkill = async (opts: InstallSkillOptions = {}): Promise<string> => {
+  const target = resolveSkillPath(opts);
+  await mkdir(join(target, '..'), { recursive: true });
+  await writeFile(target, SKILL_MD, 'utf-8');
+  return target;
+};

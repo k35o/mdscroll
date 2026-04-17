@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { Store } from '../store/state.js';
+import { createApp } from './app.js';
 import { warmup } from './render.js';
-import { createApp } from './server.js';
-import { Store } from './state.js';
 
 beforeAll(async () => {
   await warmup();

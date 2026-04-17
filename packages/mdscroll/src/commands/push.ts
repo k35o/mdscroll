@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import { readLock, removeLock } from './lockfile.js';
+import { readLock, removeLock } from '../store/lockfile.js';
 
 export type PushOptions = {
   file?: string | undefined;

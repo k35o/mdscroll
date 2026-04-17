@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { runInstallSkill } from './install-skill.js';
-import { runPush } from './push.js';
-import { runStart } from './start.js';
+import { runInstallSkill } from './commands/install-skill.js';
+import { runPush } from './commands/push.js';
+import { runStart } from './commands/start.js';
 
 type StartCliOptions = {
   port: string;

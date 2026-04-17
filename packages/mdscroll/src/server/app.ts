@@ -1,9 +1,9 @@
 import { serve, type ServerType } from '@hono/node-server';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
+import { Store } from '../store/state.js';
 import { CLIENT_JS, INDEX_HTML, STYLES_CSS } from './client.js';
 import { render } from './render.js';
-import { Store } from './state.js';
 
 export const EMPTY_PLACEHOLDER = [
   '# mdscroll',
