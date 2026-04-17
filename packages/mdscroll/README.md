@@ -9,6 +9,7 @@ mdscroll                         # start server + open browser (empty preview)
 mdscroll README.md               # start + show this file immediately
 echo "# Hello" | mdscroll push   # browser updates instantly
 mdscroll push plan.md            # or push a file
+mdscroll list                    # show all running instances
 mdscroll stop                    # stop the running server
 ```
 
@@ -33,9 +34,10 @@ pnpm add -g mdscroll
 - [Mermaid](https://mermaid.js.org) diagrams (flowcharts, sequence diagrams, …)
 - GFM extras: task lists, [alerts](https://github.com/orgs/community/discussions/16925) (Note / Tip / Important / Warning / Caution), tables, strikethrough, autolink
 - Live update via Server-Sent Events — no manual reload
+- Push history (last 20) accessible from a right-side drawer; click to view a past snapshot
+- Named instances (`--name`) for working on more than one document in parallel
 - Auto-spawn: `mdscroll push` starts the server if it isn't already running
 - Idempotent start: running `mdscroll` when a server is already up just opens the browser
-- Tiny bundle (~19KB, ~6KB gzipped)
 
 ## Usage
 
@@ -68,21 +70,41 @@ Each push replaces the current content. The browser re-renders via SSE.
 mdscroll stop               # SIGTERM the lockfile pid; lockfile is cleaned up
 ```
 
+### Multiple instances
+
+Each `--name` is an isolated server with its own port, browser tab, and history. Default name is `default`.
+
+```bash
+mdscroll --name plan plan.md       # one workspace
+mdscroll --name review review.md   # another, side-by-side
+mdscroll push --name plan more.md  # push targets the named instance
+mdscroll list                      # NAME / PID / URL / STARTED for every alive instance
+mdscroll stop --name plan          # stop a specific one
+```
+
+### History
+
+Every push is recorded as a snapshot (last 20 are kept). The browser has a right-side drawer — open it from the panel icon in the header. Each entry shows time and source (filename or `stdin`). Click a past entry to view it; click "Back to live" to follow the latest push again.
+
+The drawer uses the native [Popover API](https://developer.mozilla.org/en-US/docs/Web/API/Popover_API) — open with the toggle button, dismiss with `Esc`, click outside, or the close button.
+
 ### Flags
 
 | Flag             | Default     | Description                                                              |
 | ---------------- | ----------- | ------------------------------------------------------------------------ |
+| `-n, --name <n>` | `default`   | Instance name (lockfile, port, content, and history are per-name)        |
 | `-p, --port <n>` | `4977`      | Port to listen on. If unavailable, falls back to a free port. `0` = auto |
 | `-h, --host <h>` | `127.0.0.1` | Host to bind to                                                          |
 | `--no-open`      | —           | Skip opening the browser (start)                                         |
 
 ## How it works
 
-1. `mdscroll` boots a minimal [Hono](https://hono.dev) HTTP server and records a lock file at `~/.mdscroll/server.lock`.
+1. `mdscroll` boots a minimal [Hono](https://hono.dev) HTTP server and records a lock file at `~/.mdscroll/<name>.lock`.
 2. The server serves an SSR-rendered page plus an `/events` SSE stream.
-3. `mdscroll push` POSTs markdown to the running server (auto-spawning it if needed).
-4. The server re-renders the document and broadcasts the new HTML over SSE.
-5. The open browser swaps in the new content — no reload, no flicker.
+3. `mdscroll push` POSTs markdown to the running server (auto-spawning it if needed) and forwards the source filename via `X-Mdscroll-Source`.
+4. The server appends a Snapshot to its in-memory history (capped at 20) and broadcasts `{ html, current, history }` over SSE.
+5. The open browser swaps in the new content — no reload, no flicker. The history drawer updates in place.
+6. Clicking a past snapshot fetches `/api/snapshot/:id` to render that point in time without leaving live mode.
 
 Mermaid renders client-side from CDN the first time a diagram appears, then re-renders after each update.
 

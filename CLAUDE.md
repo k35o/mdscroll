@@ -6,10 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `mdscroll` is a CLI + lightweight HTTP server that displays Markdown in a browser. Built for AI workflows: pipe an AI-generated plan into a live local view that auto-updates via SSE.
 
-Two commands:
+Surface area:
 
-1. `mdscroll` — start server + open browser. Idempotent (lockfile-guarded).
-2. `mdscroll push <file>` or `... | mdscroll push` — update content. Auto-spawns the server if it isn't running.
+- `mdscroll [file]` — start server (idempotent, lockfile-guarded). Optional file is shown immediately.
+- `mdscroll push [file]` — push a file or stdin to the running server. Auto-spawns if needed.
+- `mdscroll stop` — SIGTERM the lockfile pid.
+- `mdscroll list` — table of every alive instance.
+- `mdscroll install-skill` — write the bundled SKILL.md to `~/.claude/skills/`.
+
+Each command (except `install-skill`/`list`) accepts `--name <n>` to scope to an isolated instance (default: `default`). Lockfiles, ports, content, and history are per-name.
 
 ## Architecture
 
@@ -19,21 +24,27 @@ Source layout (`packages/mdscroll/src/`):
 
 ```
 src/
-├── cli.ts                     # commander entry; wires up every command
+├── cli.ts                     # commander entry; wires up every command (--name on start/push/stop)
 ├── port.ts                    # resolvePort (get-port) — prefer requested, fall back to free
 ├── skill.ts                   # SKILL_MD + installSkill/resolveSkillPath (core)
 ├── types.d.ts                 # ambient types (untyped markdown-it-task-lists)
 ├── commands/                  # runX functions — one per CLI command
-│   ├── start.ts               # warm Shiki, bind, write lockfile, open browser
-│   ├── push.ts                # POST /push; auto-spawn + poll lockfile for port
+│   ├── start.ts               # warm Shiki, bind, write lockfile, open browser, optional initial file
+│   ├── push.ts                # POST /push (with X-Mdscroll-Source); auto-spawn + poll lockfile
+│   ├── stop.ts                # SIGTERM the lockfile pid (per --name)
+│   ├── list.ts                # listLocks() → tabular print of NAME / PID / URL / STARTED
 │   └── install-skill.ts       # thin CLI wrapper around installSkill
 ├── server/                    # HTTP + rendering + browser assets
-│   ├── app.ts                 # createApp(store) (testable) + startServer(opts)
+│   ├── app.ts                 # createApp(store) (testable) + startServer(opts). Routes:
+│   │                          #   GET /, /style.css, /main.js
+│   │                          #   POST /push (reads X-Mdscroll-Source header for source label)
+│   │                          #   GET /api/snapshot/:id (renders past snapshot HTML)
+│   │                          #   GET /events (SSE: { html, current, history })
 │   ├── render.ts              # markdown-it + shiki + mermaid fence + GFM plugins
-│   └── client.ts              # inline HTML / CSS / JS for the browser
+│   └── client.ts              # inline HTML / CSS / JS. Drawer uses native popover + commandfor — no JS for open/close/ESC/light-dismiss.
 └── store/                     # shared in-process state and on-disk persistence
-    ├── state.ts               # in-memory Store with versioned snapshots + listeners
-    └── lockfile.ts            # ~/.mdscroll/server.lock with dead-PID cleanup
+    ├── state.ts               # Snapshot { id, markdown, source, createdAt }; Store keeps last MAX_HISTORY=20, current()/history()/byId()/push().
+    └── lockfile.ts            # ~/.mdscroll/<name>.lock with dead-PID cleanup; readLock/writeLock/removeLock/listLocks.
 ```
 
 Tests live alongside their source (`*.test.ts`).
@@ -41,15 +52,19 @@ Tests live alongside their source (`*.test.ts`).
 Data flow on push:
 
 ```
-CLI push → POST /push → Store.set → listeners → SSE writeSSE → browser swaps #mdscroll-content
+CLI push (X-Mdscroll-Source: file|stdin)
+  → POST /push → Store.push(content, source) → listeners
+  → SSE 'update' { html, current, history } → browser swaps #mdscroll-content + redraws drawer list
 ```
+
+History drawer in the browser fetches `/api/snapshot/:id` when the user clicks a past entry; "Back to live" reverts to the latest current.
 
 ## Commands
 
 ```bash
 pnpm install          # respects minimumReleaseAge (7d), verifyDepsBeforeRun: install
 pnpm build            # vp run -r build (→ vp pack → tsdown → dist/cli.mjs with shebang)
-pnpm test             # vitest (~350ms, 78 tests)
+pnpm test             # vitest (~400ms, 101 tests)
 pnpm typecheck        # tsc --noEmit
 pnpm check            # oxlint + oxfmt
 pnpm check:write      # auto-fix
