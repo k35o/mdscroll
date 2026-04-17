@@ -49,7 +49,7 @@ mdscroll/                          # repo root
     │   │                          #   GET /events (SSE: { html, current, history })
     │   │                          # GET / sets a strict CSP header.
     │   ├── render.ts              # markdown-it + shiki + mermaid fence + GFM plugins
-    │   └── client.ts              # inline HTML / CSS / JS. Drawer uses native popover + commandfor — no JS for open/close/ESC/light-dismiss.
+    │   └── client.tsx             # Hono JSX Document (+ sub-components) for the shell, plus STYLES_CSS / CLIENT_JS string exports. Drawer uses native popover + commandfor — no JS for open/close/ESC/light-dismiss.
     └── store/                     # shared in-process state and on-disk persistence
         ├── state.ts               # Snapshot { id, markdown, source, createdAt }; Store keeps last MAX_HISTORY=20, current()/history()/byId()/push().
         ├── lockfile.ts            # ~/.mdscroll/<name>.lock with validateLock + identity + writeLockExclusive; readLock/writeLock/removeLock/listLocks.
@@ -106,6 +106,7 @@ pnpm -F mdscroll dev      # vp pack --watch
 ## Conventions
 
 - **TypeScript 6.0 stable** (not native-preview). Strict + `noUncheckedIndexedAccess` + `verbatimModuleSyntax`.
+- **JSX via `hono/jsx`** (`jsx: 'react-jsx'`, `jsxImportSource: 'hono/jsx'`). Only used server-side to compose the shell HTML in `server/client.tsx`.
 - **ESM only**, module `NodeNext`. `.js` extension in relative imports.
 - **`type` only** — no `interface`.
 - **Single quotes** (oxfmt).
