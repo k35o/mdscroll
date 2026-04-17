@@ -15,6 +15,7 @@
     "typecheck": "vp run -r typecheck",
     "check": "vp check",
     "check:write": "vp check --fix",
+    "skill:validate": "skills-ref validate skills/mdscroll",
     "changeset": "changeset",
     "version": "changeset version",
     "release": "pnpm build && changeset publish"
@@ -23,6 +24,7 @@
     "@changesets/changelog-github": "catalog:",
     "@changesets/cli": "catalog:",
     "@types/node": "catalog:",
+    "skills-ref": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:"
   },

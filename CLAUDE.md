@@ -72,6 +72,7 @@ pnpm test             # vitest (~400ms, 97 tests)
 pnpm typecheck        # tsc --noEmit
 pnpm check            # oxlint + oxfmt
 pnpm check:write      # auto-fix
+pnpm skill:validate   # validate skills/mdscroll against agentskills.io spec
 ```
 
 Single package:
@@ -91,6 +92,7 @@ pnpm -F mdscroll dev      # vp pack --watch
 - **No emojis** in source or docs unless explicitly requested.
 - **`catalog:`** for every shared dep. New deps must have a version published ≥ 7 days ago (`minimumReleaseAge: 10080`).
 - **English only** for all in-repo text (SKILL.md content, tests, comments, docs) — this is a public npm package.
+- **No npx in CI or scripts.** Any tool used by the repo must be declared in `devDependencies` (via catalog where shared) and invoked as a local binary. End-user docs can still suggest `npx mdscroll` — that is the user's choice.
 - **Testing philosophy**: see `~/.claude/skills/testing/`. Summary:
   - AAA (Arrange-Act-Assert) structure
   - 1 test 1 behavior
