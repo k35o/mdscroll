@@ -1,0 +1,39 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>k35o/renovate-config", "monorepo:vitest"],
+  "prConcurrentLimit": 10,
+  "mise": {
+    "enabled": true,
+    "managerFilePatterns": ["/^mise\\.toml$/"]
+  },
+  "packageRules": [
+    {
+      "matchPackageNames": ["/^vitest$/", "/@vitest/"],
+      "groupName": "vitest dependencies"
+    },
+    {
+      "matchPackageNames": ["/^pnpm$/"],
+      "groupName": "pnpm dependencies"
+    },
+    {
+      "matchPackageNames": ["/^node$/", "/^@types/node$/"],
+      "groupName": "node dependencies"
+    },
+    {
+      "matchPackageNames": ["/^hono$/", "/^@hono/"],
+      "groupName": "hono dependencies"
+    },
+    {
+      "matchPackageNames": ["/^markdown-it/", "/^@types/markdown-it$/"],
+      "groupName": "markdown-it dependencies"
+    },
+    {
+      "matchPackageNames": ["/^@changesets/"],
+      "groupName": "changesets dependencies"
+    },
+    {
+      "matchPackageNames": ["changesets/action"],
+      "enabled": false
+    }
+  ]
+}
