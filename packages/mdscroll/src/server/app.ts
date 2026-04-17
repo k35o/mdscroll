@@ -5,7 +5,7 @@ import { type Snapshot, Store, toMeta } from '../store/state.js';
 import { CLIENT_JS, INDEX_HTML, STYLES_CSS } from './client.js';
 import { render } from './render.js';
 
-export const EMPTY_PLACEHOLDER = [
+const EMPTY_PLACEHOLDER = [
   '# mdscroll',
   '',
   'No content yet. Push some markdown to see it here:',
