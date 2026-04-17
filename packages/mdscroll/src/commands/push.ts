@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
-import { relative, resolve } from 'node:path';
+import { openSync } from 'node:fs';
+import { mkdir, readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join, relative, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_INSTANCE_NAME, readLock, removeLock } from '../store/lockfile.js';
@@ -30,6 +32,8 @@ const readStdin = async (): Promise<string> => {
 const browserUrl = (host: string, port: number): string => `http://${host}:${port}/`;
 const pushEndpoint = (host: string, port: number): string => `http://${host}:${port}/push`;
 
+const spawnLogPath = (name: string): string => join(homedir(), '.mdscroll', `${name}.log`);
+
 const tryPost = async (url: string, body: string, source: string): Promise<boolean> => {
   try {
     const response = await fetch(url, {
@@ -46,14 +50,20 @@ const tryPost = async (url: string, body: string, source: string): Promise<boole
   }
 };
 
-const spawnServer = (name: string, port: number, host: string): void => {
+const spawnServer = async (name: string, port: number, host: string): Promise<string> => {
+  const logPath = spawnLogPath(name);
+  await mkdir(join(logPath, '..'), { recursive: true });
+  // Truncate prior logs each time we spawn so users only see the
+  // current attempt's output.
+  const fd = openSync(logPath, 'w');
   const cliPath = fileURLToPath(import.meta.url);
   const args = [cliPath, 'start', '--name', name, '--host', host, '--port', String(port)];
   const child = spawn(process.execPath, args, {
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', fd, fd],
   });
   child.unref();
+  return logPath;
 };
 
 // Poll the lockfile after spawning the server to learn the port it
@@ -61,6 +71,17 @@ const spawnServer = (name: string, port: number, host: string): void => {
 // a cold cache while staying well under a typical CLI timeout budget.
 const POLL_ATTEMPTS = 30;
 const POLL_INTERVAL_MS = 150;
+
+const tailLog = async (path: string, lines = 10): Promise<string | null> => {
+  try {
+    const content = await readFile(path, 'utf-8');
+    if (!content.trim()) return null;
+    const parts = content.split(/\r?\n/);
+    return parts.slice(-lines).join('\n').trim();
+  } catch {
+    return null;
+  }
+};
 
 export const runPush = async (opts: PushOptions): Promise<void> => {
   const name = opts.name ?? DEFAULT_INSTANCE_NAME;
@@ -86,7 +107,7 @@ export const runPush = async (opts: PushOptions): Promise<void> => {
     await removeLock(name);
   }
 
-  spawnServer(name, opts.port, opts.host);
+  const logPath = await spawnServer(name, opts.port, opts.host);
 
   for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt += 1) {
     await sleep(POLL_INTERVAL_MS);
@@ -100,6 +121,16 @@ export const runPush = async (opts: PushOptions): Promise<void> => {
     }
   }
 
-  process.stderr.write(`mdscroll[${name}]: failed to reach the spawned server\n`);
+  const tail = await tailLog(logPath);
+  process.stderr.write(
+    `mdscroll[${name}]: failed to reach the spawned server within ${(POLL_ATTEMPTS * POLL_INTERVAL_MS) / 1000}s\n`,
+  );
+  if (tail) {
+    process.stderr.write(
+      `--- last lines of ${logPath} ---\n${tail}\n-----------------------------\n`,
+    );
+  } else {
+    process.stderr.write(`See ${logPath} for spawn output.\n`);
+  }
   process.exitCode = 1;
 };
