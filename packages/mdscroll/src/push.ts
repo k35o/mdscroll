@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import { readLock } from './lockfile.js';
+import { readLock, removeLock } from './lockfile.js';
 
 export type PushOptions = {
   file?: string | undefined;
@@ -19,6 +19,8 @@ const readStdin = async (): Promise<string> => {
   return Buffer.concat(chunks).toString('utf-8');
 };
 
+const pushUrl = (host: string, port: number): string => `http://${host}:${port}/push`;
+
 const tryPost = async (url: string, body: string): Promise<boolean> => {
   try {
     const response = await fetch(url, {
@@ -34,13 +36,16 @@ const tryPost = async (url: string, body: string): Promise<boolean> => {
 
 const spawnServer = (port: number, host: string): void => {
   const cliPath = fileURLToPath(import.meta.url);
-  const child = spawn(
-    process.execPath,
-    [cliPath, 'start', '--no-open', '--port', String(port), '--host', host],
-    { detached: true, stdio: 'ignore' },
-  );
+  const args = [cliPath, 'start', '--no-open', '--host', host, '--port', String(port)];
+  const child = spawn(process.execPath, args, {
+    detached: true,
+    stdio: 'ignore',
+  });
   child.unref();
 };
+
+const POLL_ATTEMPTS = 30;
+const POLL_INTERVAL_MS = 150;
 
 export const runPush = async (opts: PushOptions): Promise<void> => {
   const content = opts.file ? await readFile(opts.file, 'utf-8') : await readStdin();
@@ -52,25 +57,29 @@ export const runPush = async (opts: PushOptions): Promise<void> => {
   }
 
   const existing = await readLock();
-  const port = existing?.port ?? opts.port;
-  const host = existing?.host ?? opts.host;
-  const url = `http://${host}:${port}/push`;
-
-  if (await tryPost(url, content)) {
-    process.stdout.write(`mdscroll: pushed to ${url}\n`);
-    return;
+  if (existing) {
+    const url = pushUrl(existing.host, existing.port);
+    if (await tryPost(url, content)) {
+      process.stdout.write(`mdscroll: pushed to ${url}\n`);
+      return;
+    }
+    // Stale lockfile — server is gone. Clean up and fall through to spawn.
+    await removeLock();
   }
 
-  spawnServer(port, host);
+  spawnServer(opts.port, opts.host);
 
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    await sleep(150);
+  for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt += 1) {
+    await sleep(POLL_INTERVAL_MS);
+    const lock = await readLock();
+    if (!lock) continue;
+    const url = pushUrl(lock.host, lock.port);
     if (await tryPost(url, content)) {
       process.stdout.write(`mdscroll: started server and pushed to ${url}\n`);
       return;
     }
   }
 
-  process.stderr.write(`mdscroll: failed to reach server at ${url}\n`);
+  process.stderr.write('mdscroll: failed to reach the spawned server\n');
   process.exitCode = 1;
 };

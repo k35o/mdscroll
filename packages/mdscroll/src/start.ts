@@ -1,5 +1,6 @@
 import open from 'open';
 import { readLock, removeLock, writeLock } from './lockfile.js';
+import { resolvePort } from './port.js';
 import { warmup } from './render.js';
 import { startServer } from './server.js';
 
@@ -20,11 +21,12 @@ export const runStart = async (opts: StartOptions): Promise<void> => {
 
   await warmup();
 
-  const handle = await startServer({ port: opts.port, host: opts.host });
+  const port = await resolvePort(opts.port);
+  const handle = await startServer({ port, host: opts.host });
 
   await writeLock({
     pid: process.pid,
-    port: opts.port,
+    port,
     host: opts.host,
     startedAt: Date.now(),
   });
