@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { runInstallSkill } from './commands/install-skill.js';
 import { runList } from './commands/list.js';
 import { runPush } from './commands/push.js';
 import { runStart } from './commands/start.js';
@@ -20,11 +19,6 @@ type PushCliOptions = {
 
 type StopCliOptions = {
   name: string;
-};
-
-type InstallSkillCliOptions = {
-  dir?: string;
-  name?: string;
 };
 
 const program = new Command();
@@ -88,18 +82,6 @@ program
   .description('List all running mdscroll instances')
   .action(async () => {
     await runList();
-  });
-
-program
-  .command('install-skill')
-  .description('Install the mdscroll Claude Code skill to ~/.claude/skills/')
-  .option('--dir <dir>', 'Install directory (default: ~/.claude/skills)')
-  .option('--name <name>', 'Skill directory name (default: mdscroll)')
-  .action(async (opts: InstallSkillCliOptions) => {
-    await runInstallSkill({
-      dir: opts.dir,
-      name: opts.name,
-    });
   });
 
 await program.parseAsync();

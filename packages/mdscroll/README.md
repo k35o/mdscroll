@@ -115,25 +115,19 @@ Mermaid renders client-side from CDN the first time a diagram appears, then re-r
 - Dangerous URL schemes (e.g. `javascript:`) are rejected by markdown-it's default validator.
 - The server binds to `127.0.0.1` by default. Override with `--host` only if you understand the exposure.
 
-## Claude Code integration
+## Agent integration
 
-mdscroll ships a [Claude Code Skill](https://docs.claude.com/en/docs/claude-code/skills) so that an AI assistant can send its own generated Markdown to your browser without manual piping.
+mdscroll ships an [Agent Skill](https://agentskills.io) ([`skills/mdscroll/SKILL.md`](../../skills/mdscroll/SKILL.md)) so AI coding agents (Claude Code, Cursor, Codex, GitHub Copilot, …) can pipe their own generated Markdown into the preview without you copy-pasting.
 
-Install the skill once:
-
-```bash
-mdscroll install-skill
-# writes ~/.claude/skills/mdscroll/SKILL.md
-```
-
-With the skill installed, Claude Code automatically uses `mdscroll push` when you ask it to "show me the plan in the browser" or when it generates a long structured document that would be easier to read rendered.
-
-Options:
+Install with the GitHub CLI:
 
 ```bash
-mdscroll install-skill --name show        # install as ~/.claude/skills/show/
-mdscroll install-skill --dir /custom/path # install to a different directory
+gh skill install k35o/mdscroll        # interactive picker; choose your agent target
 ```
+
+Or any [agentskills.io](https://agentskills.io)-compatible installer (e.g. `npx skills add k35o/mdscroll`). The skill ends up at the agent's standard skills directory (e.g. `~/.claude/skills/mdscroll/SKILL.md` for Claude Code).
+
+Once installed, ask the agent to "show me the plan in the browser" or hand it a long structured doc and it'll pipe to `mdscroll push` automatically.
 
 ## Status
 
