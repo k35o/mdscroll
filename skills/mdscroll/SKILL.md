@@ -6,7 +6,7 @@ license: MIT
 
 # mdscroll
 
-Push generated Markdown to the local mdscroll preview server. It renders content with GitHub-style styling, Shiki syntax highlighting, Mermaid diagrams, GFM alerts, task lists, and tables. Recent pushes (last 20) are listed in a History drawer.
+Serve generated Markdown to the local mdscroll preview server so the user can read it in their browser. It renders content with GitHub-style styling, Shiki syntax highlighting, Mermaid diagrams, GFM alerts, task lists, and tables. Point it at a file and every change to that file is auto-reloaded in the browser over Server-Sent Events.
 
 ## When to use
 
@@ -20,44 +20,62 @@ Do NOT use this for short answers, one-off replies, or small code snippets.
 
 ## How to use
 
-Two input shapes:
+mdscroll is a foreground process with two input shapes.
+
+### 1) Write to a file, let mdscroll watch it (preferred for iterative work)
 
 ```bash
-# 1) Stream content directly via stdin (most common for AI-generated text)
-cat <<'MDSCROLL_EOF' | mdscroll push
+# Agent writes the doc to a file under the user's cwd:
+cat > docs/plan.md <<'MDSCROLL_EOF'
 # Title
 
 Body...
 MDSCROLL_EOF
 
-# 2) Existing file on disk — `mdscroll <file>` is a shortcut for `mdscroll push <file>`
+# Then tell the user to run (or start it in a separate pane):
 mdscroll docs/plan.md
 ```
 
-Both paths auto-spawn the server if it isn't already running, then exit. Stdout includes the **browser URL** you can hand to the user or open:
+As you update `docs/plan.md` in later turns, the browser auto-reloads within ~100 ms. This is the right shape when the user wants to keep reading while you iterate.
+
+### 2) Stream once via stdin (good for throwaway output)
+
+```bash
+cat <<'MDSCROLL_EOF' | mdscroll
+# Title
+
+Body...
+MDSCROLL_EOF
+```
+
+The server renders the piped markdown once and stays foreground until Ctrl+C. No auto-reload — if you want to push an updated version, re-run the command.
+
+## Output
+
+mdscroll prints the URL and keeps running:
 
 ```
-mdscroll[default]: pushed to http://127.0.0.1:4977/
+mdscroll running at http://127.0.0.1:4977
 ```
+
+mdscroll never opens a browser itself. Hand the URL to the user or, if the host environment supports it, open it through the environment's browser helper (e.g. `cmux browser open-split <url>` inside cmux).
 
 ## Steps
 
-1. Assemble the Markdown you want to display
-2. Push it using one of the commands above
-3. If the exit code is 0 and you see `mdscroll[...]: pushed to <url>` (the URL ends with `/`, not `/push`), it worked
-4. mdscroll never opens a browser itself. Open the URL in whatever browser surface fits the host environment (e.g. `cmux browser open-split <url>` inside cmux) and point the user at it
-
-## Notes for the History drawer
-
-- Each push is recorded as a snapshot. The drawer (toggle in the page header) lists them newest-first
-- The "source" label shown in the drawer is the path **relative to the cwd at push time** (e.g. `packages/foo/README.md`), or `stdin` for piped input. This lets the user disambiguate same-named files
-- The user can click any past snapshot to view it; "Back to live" returns to the latest
+1. Decide between file-watch mode (when the user will iterate on the content) and stdin mode (one-shot output).
+2. For file-watch: write the Markdown to a file under the user's cwd, then suggest `mdscroll <file>` (or run it yourself in a separate pane).
+3. For stdin: pipe the content to `mdscroll` using a heredoc.
+4. Confirm the URL was printed, then point the user at it.
 
 ## Useful flags
 
-- `--name <n>` (on `push` and `start`) — isolated instance with its own port, content, and history. Default is `default`. Use this when the user wants two preview windows side-by-side (e.g. `--name plan` and `--name review`)
-- `--port <n>` / `--host <h>` — defaults are `127.0.0.1:4977`; if the port is taken mdscroll falls back to a free one
-- `mdscroll list` — prints every alive instance (NAME / PID / URL / STARTED), handy if you forget what's running
+- `--port <n>` / `--host <h>` — defaults are `127.0.0.1:4977`; if the port is taken mdscroll falls back to a free one.
+
+## What mdscroll does NOT do
+
+- There is no persistent background server and no subcommand surface. `mdscroll push`, `mdscroll stop`, `mdscroll list`, and `--name` existed in 0.1.x but were removed in 0.2.0. One foreground process per preview.
+- It writes nothing to disk — no lockfile, no log, no `~/.mdscroll/`.
+- It does not auto-open a browser.
 
 ## When the command is missing
 

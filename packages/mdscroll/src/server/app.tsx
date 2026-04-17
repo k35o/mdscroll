@@ -2,44 +2,27 @@ import { serve, type ServerType } from '@hono/node-server';
 import { Hono } from 'hono';
 import { html } from 'hono/html';
 import { streamSSE } from 'hono/streaming';
-import { type Snapshot, Store, toMeta } from '../store/state.js';
+import { displaySourceLabel } from '../source.js';
+import { type Snapshot, Store } from '../store/state.js';
 import { CLIENT_JS, Document, STYLES_CSS } from './client.js';
 import { render } from './render.js';
 
-const EMPTY_PLACEHOLDER = [
-  '# mdscroll',
-  '',
-  'No content yet. Push some markdown to see it here:',
-  '',
-  '```bash',
-  'echo "# hello" | mdscroll push',
-  'mdscroll push plan.md',
-  '```',
-].join('\n');
+const EMPTY_PLACEHOLDER = ['# mdscroll', '', 'No content yet.'].join('\n');
+const EMPTY_SOURCE = '(untitled)';
 
 export type ServerHandle = {
   url: string;
-  store: Store;
   close: () => Promise<void>;
 };
 
 const renderCurrent = (current: Snapshot | null): Promise<string> =>
   render(current?.markdown ?? EMPTY_PLACEHOLDER);
 
-export type CreateAppOptions = {
-  identity?: string | undefined;
-};
+const sourceOf = (current: Snapshot | null): string =>
+  displaySourceLabel(current?.source ?? EMPTY_SOURCE);
 
-export const createApp = (store: Store, options: CreateAppOptions = {}): Hono => {
+export const createApp = (store: Store): Hono => {
   const app = new Hono();
-  const identity = options.identity;
-
-  app.get('/identity', (c) => {
-    // Returned so `mdscroll stop` can prove this server is ours before
-    // sending SIGTERM. Empty when the caller never set one (e.g. in
-    // tests), and that case is treated as "can't verify".
-    return c.json({ identity: identity ?? '' });
-  });
 
   // Content-Security-Policy for the HTML document. Restricts where the
   // page can load scripts, styles, connections, etc. The one remote
@@ -60,11 +43,14 @@ export const createApp = (store: Store, options: CreateAppOptions = {}): Hono =>
   ].join('; ');
 
   app.get('/', async (c) => {
-    const contentHtml = await renderCurrent(store.current());
+    const current = store.current();
+    const contentHtml = await renderCurrent(current);
     c.header('Content-Security-Policy', CSP);
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('Referrer-Policy', 'no-referrer');
-    return c.html(html`<!doctype html>${<Document contentHtml={contentHtml} />}`);
+    return c.html(
+      html`<!doctype html>${<Document contentHtml={contentHtml} source={sourceOf(current)} />}`,
+    );
   });
 
   app.get('/style.css', (c) => {
@@ -79,60 +65,13 @@ export const createApp = (store: Store, options: CreateAppOptions = {}): Hono =>
     return c.body(CLIENT_JS);
   });
 
-  // Upper bound on a single push. 5 MiB comfortably fits a long plan
-  // with embedded diagrams while making bulk DoS noticeably harder.
-  const MAX_PUSH_BYTES = 5 * 1024 * 1024;
-
-  app.post('/push', async (c) => {
-    // CSRF guard: require the custom header we set in commands/push.ts.
-    // Browsers cannot send custom headers cross-origin without a CORS
-    // preflight, and we never answer preflights, so a random webpage
-    // cannot forge a push against localhost:4977.
-    const source = c.req.header('X-Mdscroll-Source');
-    if (typeof source !== 'string' || source.length === 0) {
-      return c.json({ error: 'X-Mdscroll-Source header is required' }, { status: 400 });
-    }
-
-    const declared = c.req.header('content-length');
-    if (declared !== undefined) {
-      const declaredLen = Number(declared);
-      if (!Number.isFinite(declaredLen) || declaredLen > MAX_PUSH_BYTES) {
-        return c.json({ error: 'payload too large' }, { status: 413 });
-      }
-    }
-
-    const body = await c.req.text();
-    if (Buffer.byteLength(body, 'utf-8') > MAX_PUSH_BYTES) {
-      return c.json({ error: 'payload too large' }, { status: 413 });
-    }
-
-    const snapshot = store.push(body, source);
-    return c.json({ ok: true, id: snapshot.id });
-  });
-
-  app.get('/api/snapshot/:id', async (c) => {
-    const id = c.req.param('id');
-    const snapshot = store.byId(id);
-    if (!snapshot) return c.json({ error: 'not found' }, 404);
-    const html = await render(snapshot.markdown);
-    return c.json({
-      html,
-      source: snapshot.source,
-      createdAt: snapshot.createdAt,
-    });
-  });
-
   app.get('/events', (c) => {
     return streamSSE(c, async (stream) => {
       const sendUpdate = async (current: Snapshot | null) => {
-        const html = await renderCurrent(current);
+        const rendered = await renderCurrent(current);
         await stream.writeSSE({
           event: 'update',
-          data: JSON.stringify({
-            html,
-            current: current ? toMeta(current) : null,
-            history: store.history().map(toMeta),
-          }),
+          data: JSON.stringify({ html: rendered, source: sourceOf(current) }),
         });
       };
 
@@ -160,10 +99,9 @@ export const createApp = (store: Store, options: CreateAppOptions = {}): Hono =>
 export const startServer = async (opts: {
   port: number;
   host: string;
-  identity?: string | undefined;
+  store: Store;
 }): Promise<ServerHandle> => {
-  const store = new Store();
-  const app = createApp(store, { identity: opts.identity });
+  const app = createApp(opts.store);
 
   const server: ServerType = serve({
     fetch: app.fetch,
@@ -181,5 +119,5 @@ export const startServer = async (opts: {
       });
     });
 
-  return { url, store, close };
+  return { url, close };
 };
