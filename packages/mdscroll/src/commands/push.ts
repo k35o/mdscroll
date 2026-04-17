@@ -34,9 +34,15 @@ const pushEndpoint = (host: string, port: number): string => `http://${host}:${p
 
 const spawnLogPath = (name: string): string => join(homedir(), '.mdscroll', `${name}.log`);
 
-const tryPost = async (url: string, body: string, source: string): Promise<boolean> => {
+export type PostResult =
+  | { kind: 'ok' }
+  | { kind: 'rejected'; status: number; detail?: string }
+  | { kind: 'unreachable' };
+
+export const tryPost = async (url: string, body: string, source: string): Promise<PostResult> => {
+  let response: Response;
   try {
-    const response = await fetch(url, {
+    response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
@@ -44,10 +50,23 @@ const tryPost = async (url: string, body: string, source: string): Promise<boole
       },
       body,
     });
-    return response.ok;
   } catch {
-    return false;
+    // Connection refused, DNS failure, socket reset — the server is
+    // not answering at all, so it is reasonable to treat this as a
+    // stale lock.
+    return { kind: 'unreachable' };
   }
+  if (response.ok) return { kind: 'ok' };
+  // The server was reached and returned an error. The instance is
+  // alive and should NOT be treated as stale — leave its lock in
+  // place. Try to surface a body snippet for diagnostics.
+  let detail: string | undefined;
+  try {
+    detail = (await response.text()).slice(0, 200);
+  } catch {
+    detail = undefined;
+  }
+  return { kind: 'rejected', status: response.status, detail };
 };
 
 const spawnServer = async (name: string, port: number, host: string): Promise<string> => {
@@ -97,13 +116,25 @@ export const runPush = async (opts: PushOptions): Promise<void> => {
 
   const existing = await readLock(name);
   if (existing) {
-    if (await tryPost(pushEndpoint(existing.host, existing.port), content, source)) {
+    const result = await tryPost(pushEndpoint(existing.host, existing.port), content, source);
+    if (result.kind === 'ok') {
       process.stdout.write(
         `mdscroll[${name}]: pushed to ${browserUrl(existing.host, existing.port)}\n`,
       );
       return;
     }
-    // Stale lockfile — server is gone. Clean up and fall through to spawn.
+    if (result.kind === 'rejected') {
+      // Server answered with a 4xx/5xx — it is alive and intentionally
+      // refusing this push. Keep the lock, surface the status, and exit 1.
+      process.stderr.write(
+        `mdscroll[${name}]: server rejected push with ${result.status}${
+          result.detail ? `: ${result.detail}` : ''
+        }\n`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    // unreachable — server is gone. Clean up and fall through to spawn.
     await removeLock(name);
   }
 
@@ -113,10 +144,21 @@ export const runPush = async (opts: PushOptions): Promise<void> => {
     await sleep(POLL_INTERVAL_MS);
     const lock = await readLock(name);
     if (!lock) continue;
-    if (await tryPost(pushEndpoint(lock.host, lock.port), content, source)) {
+    const result = await tryPost(pushEndpoint(lock.host, lock.port), content, source);
+    if (result.kind === 'ok') {
       process.stdout.write(
         `mdscroll[${name}]: started server and pushed to ${browserUrl(lock.host, lock.port)}\n`,
       );
+      return;
+    }
+    if (result.kind === 'rejected') {
+      // Freshly-spawned server is live but rejecting — no point in polling.
+      process.stderr.write(
+        `mdscroll[${name}]: spawned server rejected push with ${result.status}${
+          result.detail ? `: ${result.detail}` : ''
+        }\n`,
+      );
+      process.exitCode = 1;
       return;
     }
   }
