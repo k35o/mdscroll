@@ -4,17 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`mdscroll` is a CLI + lightweight HTTP server that displays Markdown in a browser. Built for AI workflows: pipe an AI-generated plan into a live local view that auto-updates via SSE.
+`mdscroll` is a CLI that previews a markdown file (or piped markdown) in the local browser. It is a **foreground, single-instance** process — no daemon, no lockfile, no state on disk. Built for AI workflows: an agent writes a plan to a file, the user runs `mdscroll <file>` once, and every update the agent makes to the file is reflected in the browser over SSE.
 
 Surface area:
 
-- `mdscroll` — start the server in the foreground (idempotent, lockfile-guarded). **Does not open a browser** — only prints the URL.
-- `mdscroll <file>` — alias for `mdscroll push <file>`; the cli routes the optional [file] arg to `runPush` so the two forms behave identically (auto-spawn detached + exit).
-- `mdscroll push [file]` — push a file or stdin to the running server. Auto-spawns if needed.
-- `mdscroll stop` — SIGTERM the lockfile pid.
-- `mdscroll list` — table of every alive instance.
+- `mdscroll <file>` — read the file, serve it, watch it, re-render on every change. Foreground, Ctrl+C to quit.
+- `mdscroll` (with piped stdin) — read stdin to EOF, serve once. Foreground, Ctrl+C to quit.
+- `mdscroll` (TTY, no file) — print usage and exit 1.
+- `mdscroll --port <n>` / `--host <h>` — change the bind address. Port collisions fall back to a free port via get-port.
 
-Each command (except `list`) accepts `--name <n>` to scope to an isolated instance (default: `default`). Lockfiles, ports, content, and history are per-name.
+No subcommands. No `--name`. No `push` / `stop` / `list`. The only "state" is what's in the running process's memory.
 
 Browser opening is intentionally not handled by the CLI. The host environment (system default browser, cmux pane, an AI agent's open-helper, etc) is responsible for navigating to the URL.
 
@@ -28,67 +27,56 @@ Source layout (`packages/mdscroll/src/`):
 
 ```
 mdscroll/                          # repo root
-├── skills/mdscroll/SKILL.md       # agent skill (agentskills.io spec); installed via `gh skill install k35o/mdscroll`
+├── skills/mdscroll/SKILL.md       # agent skill (agentskills.io spec)
 └── packages/mdscroll/src/
-    ├── cli.ts                     # commander entry; wires up every command (--name on start/push/stop)
-    ├── constants.ts               # DEFAULT_HOST / DEFAULT_PORT / DEFAULT_INSTANCE_NAME
-    ├── port.ts                    # resolvePort (get-port) — prefer requested, fall back to free
-    ├── types.d.ts                 # ambient types (untyped markdown-it-task-lists)
-    ├── commands/                  # runX functions — one per CLI command, plus small single-purpose helpers
-    │   ├── start.ts               # warmup + claimLock (writeLockExclusive) + bind (foreground)
-    │   ├── push.ts                # orchestration: read input → POST → spawn+poll
-    │   ├── stop.ts                # SIGTERM the lockfile pid after /identity check
-    │   ├── list.ts                # listLocks() → tabular print of NAME / PID / URL / STARTED
-    │   ├── http.ts                # postPush + PostResult (transport only, no flow)
-    │   └── spawn.ts               # spawnDetachedServer + tailLog (detached spawn + per-instance log)
-    ├── server/                    # HTTP + rendering + browser assets
-    │   ├── app.ts                 # createApp(store, {identity}) + startServer(opts). Routes:
-    │   │                          #   GET /, /style.css, /main.js, /identity
-    │   │                          #   POST /push (X-Mdscroll-Source required, 5 MiB cap)
-    │   │                          #   GET /api/snapshot/:id (renders past snapshot HTML)
-    │   │                          #   GET /events (SSE: { html, current, history })
-    │   │                          # GET / sets a strict CSP header.
-    │   ├── render.ts              # markdown-it + shiki + mermaid fence + GFM plugins
-    │   └── client.tsx             # Hono JSX Document (+ sub-components) for the shell, plus STYLES_CSS / CLIENT_JS string exports. Drawer uses native popover + commandfor — no JS for open/close/ESC/light-dismiss.
-    └── store/                     # shared in-process state and on-disk persistence
-        ├── state.ts               # Snapshot { id, markdown, source, createdAt }; Store keeps last MAX_HISTORY=20, current()/history()/byId()/push().
-        ├── lockfile.ts            # ~/.mdscroll/<name>.lock with validateLock + identity + writeLockExclusive; readLock/writeLock/removeLock/listLocks.
-        └── instance-name.ts       # isValidInstanceName / assertValidInstanceName — defends lockfile + log paths from traversal.
+    ├── cli.ts                     # commander entry (single command, no subcommands)
+    ├── run.ts                     # runMdscroll(opts) + ingestContent(opts, store); orchestrates file / stdin / TTY-help branches, warms up the renderer, binds the server, wires SIGINT/SIGTERM.
+    ├── watch.ts                   # watchFile(path, onChange): fs.watch on the parent dir, filter by basename (survives editor swap-save), 100ms trailing debounce.
+    ├── source.ts                  # fileSourceLabel(file) → cwd-relative path; stdinSourceLabel(md) → first H1 or '(untitled)'.
+    ├── port.ts                    # resolvePort (get-port) — prefer requested, fall back to free.
+    ├── constants.ts               # DEFAULT_HOST / DEFAULT_PORT.
+    ├── types.d.ts                 # ambient types (untyped markdown-it-task-lists).
+    ├── server/
+    │   ├── app.tsx                # createApp(store) + startServer({port, host, store}). Routes: GET /, /style.css, /main.js, /events (SSE). No POST, no identity, no snapshot API. GET / sets a strict CSP.
+    │   ├── render.ts              # markdown-it + shiki + mermaid fence + GFM plugins.
+    │   └── client.tsx             # Hono JSX Document + Header (brand / source label / status), plus STYLES_CSS and CLIENT_JS string exports. CLIENT_JS subscribes to /events and swaps #mdscroll-content + #mdscroll-source on each update.
+    └── store/
+        └── state.ts               # Snapshot { markdown, source, createdAt } + Store { current(), setCurrent(), subscribe() }. Single-slot, in-memory, no history.
 ```
 
 Dependency layers (no cycles):
 
 ```
 cli
- └─ commands/*   (runStart / runPush / runStop / runList)
-      ├─ commands/http      (postPush: transport only)
-      ├─ commands/spawn     (detached spawn + log tailing)
-      ├─ server/app         (startServer for foreground `start`)
-      ├─ server/render      (warmup for fast first render)
-      └─ store/lockfile
-           └─ store/instance-name
-server/app → server/render, server/client, store/state
-store/lockfile → constants, store/instance-name
+ └─ run
+      ├─ watch            (fs.watch + debounce)
+      ├─ source           (label resolution)
+      ├─ port             (get-port fallback)
+      ├─ server/app       (Hono routes + startServer)
+      │    ├─ server/client  (JSX shell + CSS/JS)
+      │    ├─ server/render  (markdown-it + shiki + mermaid)
+      │    └─ store/state    (current + subscribe)
+      └─ store/state
 ```
 
 Tests live alongside their source (`*.test.ts`).
 
-Data flow on push:
+Data flow on a file save:
 
 ```
-CLI push (X-Mdscroll-Source: file|stdin)
-  → POST /push → Store.push(content, source) → listeners
-  → SSE 'update' { html, current, history } → browser swaps #mdscroll-content + redraws drawer list
+fs.watch (parent dir)
+  → debounce 100ms → readFile → store.setCurrent(md, label) → listeners
+  → SSE 'update' { html, source } → browser swaps #mdscroll-content + updates #mdscroll-source
 ```
 
-History drawer in the browser fetches `/api/snapshot/:id` when the user clicks a past entry; "Back to live" reverts to the latest current.
+Stdin mode runs the first two steps once at startup; no watcher is attached.
 
 ## Commands
 
 ```bash
 pnpm install          # respects minimumReleaseAge (7d), verifyDepsBeforeRun: install
 pnpm build            # vp run -r build (→ vp pack → tsdown → dist/cli.mjs with shebang)
-pnpm test             # vitest (~400ms, 97 tests)
+pnpm test             # vitest (~1s, 83 tests)
 pnpm typecheck        # tsc --noEmit
 pnpm check            # oxlint + oxfmt
 pnpm check:write      # auto-fix
@@ -102,6 +90,8 @@ pnpm -F mdscroll build
 pnpm -F mdscroll test
 pnpm -F mdscroll dev      # vp pack --watch
 ```
+
+Note: `port.test.ts` and `watch.test.ts` bind localhost ports and open `fs.watch` handles respectively, so they fail under Claude Code's default sandbox (EPERM / EMFILE). Run them with the sandbox disabled or from a host shell.
 
 ## Conventions
 
@@ -118,7 +108,7 @@ pnpm -F mdscroll dev      # vp pack --watch
   - AAA (Arrange-Act-Assert) structure
   - 1 test 1 behavior
   - `describe` / `it` names describe behavior, not implementation
-  - Per-test isolation (e.g. `tmpdir` for lockfile tests)
+  - Per-test isolation (e.g. `tmpdir` for fs tests)
   - Avoid self-fulfilling assertions (don't recompute the expected in the test)
 
 ## Adding a dependency
