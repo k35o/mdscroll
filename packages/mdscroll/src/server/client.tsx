@@ -1,65 +1,130 @@
-export const INDEX_HTML = `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>mdscroll</title>
-    <link rel="stylesheet" href="/style.css" />
-  </head>
-  <body>
-    <div class="mdscroll-shell">
-      <header class="mdscroll-header">
-        <span class="mdscroll-brand">mdscroll</span>
-        <div class="mdscroll-actions">
-          <button id="mdscroll-live" class="mdscroll-live" hidden>Back to live</button>
-          <button
-            class="mdscroll-icon-button"
-            type="button"
-            command="toggle-popover"
-            commandfor="mdscroll-history-drawer"
-            aria-label="Toggle history"
-          >
-            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="2" y="3" width="12" height="10" rx="1.5"/>
-              <line x1="6" y1="3" x2="6" y2="13"/>
-            </svg>
-          </button>
-          <span class="mdscroll-status" id="mdscroll-status" data-state="idle">idle</span>
-        </div>
-      </header>
-      <main class="mdscroll-main">
-        <article id="mdscroll-content" class="markdown-body">{{CONTENT}}</article>
-      </main>
+import type { FC } from 'hono/jsx';
+
+// The popover API "Invokers" attributes (`command`, `commandfor`) are
+// newer than the stock JSX types. Declare them as allowed on <button>.
+declare module 'hono/jsx' {
+  namespace JSX {
+    interface HTMLAttributes {
+      command?: string;
+      commandfor?: string;
+    }
+  }
+}
+
+type DocumentProps = {
+  /** Pre-rendered HTML (from markdown-it + shiki) inlined into <article>. */
+  contentHtml: string;
+};
+
+const PanelIcon: FC = () => (
+  <svg
+    viewBox="0 0 16 16"
+    width="14"
+    height="14"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    aria-hidden="true"
+  >
+    <rect x="2" y="3" width="12" height="10" rx="1.5" />
+    <line x1="6" y1="3" x2="6" y2="13" />
+  </svg>
+);
+
+const CloseIcon: FC = () => (
+  <svg
+    viewBox="0 0 16 16"
+    width="14"
+    height="14"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.5"
+    stroke-linecap="round"
+    aria-hidden="true"
+  >
+    <line x1="3.5" y1="3.5" x2="12.5" y2="12.5" />
+    <line x1="12.5" y1="3.5" x2="3.5" y2="12.5" />
+  </svg>
+);
+
+const Header: FC = () => (
+  <header class="mdscroll-header">
+    <span class="mdscroll-brand">mdscroll</span>
+    <div class="mdscroll-actions">
+      <button id="mdscroll-live" class="mdscroll-live" hidden>
+        Back to live
+      </button>
+      <button
+        class="mdscroll-icon-button"
+        type="button"
+        command="toggle-popover"
+        commandfor="mdscroll-history-drawer"
+        aria-label="Toggle history"
+      >
+        <PanelIcon />
+      </button>
+      <span class="mdscroll-status" id="mdscroll-status" data-state="idle">
+        idle
+      </span>
     </div>
-    <aside
-      id="mdscroll-history-drawer"
-      class="mdscroll-drawer"
-      popover
-      aria-label="History"
-    >
-      <header class="mdscroll-drawer-header">
-        <span class="mdscroll-drawer-title">History</span>
-        <button
-          class="mdscroll-icon-button"
-          type="button"
-          command="hide-popover"
-          commandfor="mdscroll-history-drawer"
-          aria-label="Close history"
-        >
-          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
-            <line x1="3.5" y1="3.5" x2="12.5" y2="12.5"/>
-            <line x1="12.5" y1="3.5" x2="3.5" y2="12.5"/>
-          </svg>
-        </button>
-      </header>
-      <ul id="mdscroll-history" class="mdscroll-history">
-        <li class="mdscroll-history-empty">No pushes yet</li>
-      </ul>
-    </aside>
-    <script type="module" src="/main.js"></script>
-  </body>
-</html>
-`;
+  </header>
+);
+
+const HistoryDrawer: FC = () => (
+  <aside
+    id="mdscroll-history-drawer"
+    class="mdscroll-drawer"
+    // Light dismiss: Esc + click-outside close automatically.
+    popover="auto"
+    aria-label="History"
+  >
+    <header class="mdscroll-drawer-header">
+      <span class="mdscroll-drawer-title">History</span>
+      <button
+        class="mdscroll-icon-button"
+        type="button"
+        command="hide-popover"
+        commandfor="mdscroll-history-drawer"
+        aria-label="Close history"
+      >
+        <CloseIcon />
+      </button>
+    </header>
+    <ul id="mdscroll-history" class="mdscroll-history">
+      <li class="mdscroll-history-empty">No pushes yet</li>
+    </ul>
+  </aside>
+);
+
+export const Document: FC<DocumentProps> = ({ contentHtml }) => (
+  <html lang="en">
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>mdscroll</title>
+      <link rel="stylesheet" href="/style.css" />
+    </head>
+    <body>
+      <div class="mdscroll-shell">
+        <Header />
+        <main class="mdscroll-main">
+          <article
+            id="mdscroll-content"
+            class="markdown-body"
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: content
+            // is produced by our own markdown-it renderer (html: false,
+            // shiki-highlighted) and is the whole point of the server.
+            dangerouslySetInnerHTML={{ __html: contentHtml }}
+          />
+        </main>
+      </div>
+      <HistoryDrawer />
+      <script type="module" src="/main.js" />
+    </body>
+  </html>
+);
 
 export const STYLES_CSS = `:root {
   color-scheme: light dark;

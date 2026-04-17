@@ -1,8 +1,9 @@
 import { serve, type ServerType } from '@hono/node-server';
 import { Hono } from 'hono';
+import { html } from 'hono/html';
 import { streamSSE } from 'hono/streaming';
 import { type Snapshot, Store, toMeta } from '../store/state.js';
-import { CLIENT_JS, INDEX_HTML, STYLES_CSS } from './client.js';
+import { CLIENT_JS, Document, STYLES_CSS } from './client.js';
 import { render } from './render.js';
 
 const EMPTY_PLACEHOLDER = [
@@ -59,12 +60,11 @@ export const createApp = (store: Store, options: CreateAppOptions = {}): Hono =>
   ].join('; ');
 
   app.get('/', async (c) => {
-    const html = await renderCurrent(store.current());
-    const page = INDEX_HTML.replace('{{CONTENT}}', html);
+    const contentHtml = await renderCurrent(store.current());
     c.header('Content-Security-Policy', CSP);
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('Referrer-Policy', 'no-referrer');
-    return c.html(page);
+    return c.html(html`<!doctype html>${<Document contentHtml={contentHtml} />}`);
   });
 
   app.get('/style.css', (c) => {
