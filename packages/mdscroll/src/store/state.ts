@@ -1,33 +1,52 @@
+import { randomUUID } from 'node:crypto';
+
 export type Snapshot = {
+  id: string;
   markdown: string;
-  version: number;
-  updatedAt: number;
+  source: string;
+  createdAt: number;
 };
+
+export type SnapshotMeta = Omit<Snapshot, 'markdown'>;
 
 export type Listener = (snapshot: Snapshot) => void;
 
+export const MAX_HISTORY = 20;
+
+export const toMeta = (snapshot: Snapshot): SnapshotMeta => ({
+  id: snapshot.id,
+  source: snapshot.source,
+  createdAt: snapshot.createdAt,
+});
+
 export class Store {
-  private snapshot: Snapshot = {
-    markdown: '',
-    version: 0,
-    updatedAt: Date.now(),
-  };
+  private snapshots: Snapshot[] = [];
   private listeners = new Set<Listener>();
 
-  get(): Snapshot {
-    return this.snapshot;
+  current(): Snapshot | null {
+    return this.snapshots[0] ?? null;
   }
 
-  set(markdown: string): Snapshot {
-    this.snapshot = {
+  history(): Snapshot[] {
+    return this.snapshots.slice();
+  }
+
+  byId(id: string): Snapshot | null {
+    return this.snapshots.find((s) => s.id === id) ?? null;
+  }
+
+  push(markdown: string, source: string): Snapshot {
+    const snapshot: Snapshot = {
+      id: randomUUID(),
       markdown,
-      version: this.snapshot.version + 1,
-      updatedAt: Date.now(),
+      source,
+      createdAt: Date.now(),
     };
+    this.snapshots = [snapshot, ...this.snapshots].slice(0, MAX_HISTORY);
     for (const listener of this.listeners) {
-      listener(this.snapshot);
+      listener(snapshot);
     }
-    return this.snapshot;
+    return snapshot;
   }
 
   subscribe(listener: Listener): () => void {

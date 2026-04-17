@@ -50,7 +50,10 @@ export const runStart = async (opts: StartOptions): Promise<void> => {
     startedAt: Date.now(),
   });
 
-  if (initial !== null) handle.store.set(initial);
+  if (initial !== null) {
+    const source = opts.file ?? 'unknown';
+    handle.store.push(initial, source);
+  }
 
   process.stdout.write(`mdscroll[${name}] running at ${handle.url}\n`);
 

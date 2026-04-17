@@ -23,9 +23,9 @@ describe('createApp', () => {
       expect(body).toContain('No content yet');
     });
 
-    it('renders and embeds the markdown from the store', async () => {
+    it('renders and embeds the current snapshot from the store', async () => {
       const store = new Store();
-      store.set('# Hello World');
+      store.push('# Hello World', 'test');
       const app = createApp(store);
       const res = await app.request('/');
       const body = await res.text();
@@ -64,40 +64,72 @@ describe('createApp', () => {
   });
 
   describe('POST /push', () => {
-    it('updates the store with the request body', async () => {
+    it('appends a new snapshot to the store', async () => {
+      const store = new Store();
+      const app = createApp(store);
+      await app.request('/push', { method: 'POST', body: '# Pushed' });
+      expect(store.current()?.markdown).toBe('# Pushed');
+    });
+
+    it('uses X-Mdscroll-Source header as the snapshot source', async () => {
       const store = new Store();
       const app = createApp(store);
       await app.request('/push', {
         method: 'POST',
-        body: '# Pushed',
+        body: 'hi',
+        headers: { 'X-Mdscroll-Source': 'plan.md' },
       });
-      expect(store.get().markdown).toBe('# Pushed');
+      expect(store.current()?.source).toBe('plan.md');
     });
 
-    it('returns the new version number', async () => {
+    it('defaults source to "unknown" when no header is provided', async () => {
+      const store = new Store();
+      const app = createApp(store);
+      await app.request('/push', { method: 'POST', body: 'hi' });
+      expect(store.current()?.source).toBe('unknown');
+    });
+
+    it('returns the new snapshot id', async () => {
       const store = new Store();
       const app = createApp(store);
       const res = await app.request('/push', { method: 'POST', body: 'a' });
-      const json = (await res.json()) as { ok: boolean; version: number };
-      expect(json).toEqual({ ok: true, version: 1 });
+      const json = (await res.json()) as { ok: boolean; id: string };
+      expect(json.ok).toBe(true);
+      expect(typeof json.id).toBe('string');
     });
 
-    it('advances the version on each push', async () => {
+    it('keeps history newest-first across multiple pushes', async () => {
       const store = new Store();
       const app = createApp(store);
       await app.request('/push', { method: 'POST', body: 'a' });
       await app.request('/push', { method: 'POST', body: 'b' });
-      const res = await app.request('/push', { method: 'POST', body: 'c' });
-      const json = (await res.json()) as { ok: boolean; version: number };
-      expect(json.version).toBe(3);
+      await app.request('/push', { method: 'POST', body: 'c' });
+      expect(store.history().map((s) => s.markdown)).toEqual(['c', 'b', 'a']);
+    });
+  });
+
+  describe('GET /api/snapshot/:id', () => {
+    it('returns rendered HTML for a known snapshot', async () => {
+      const store = new Store();
+      const snap = store.push('# alpha', 'plan.md');
+      const app = createApp(store);
+
+      const res = await app.request(`/api/snapshot/${snap.id}`);
+      const json = (await res.json()) as {
+        html: string;
+        source: string;
+        createdAt: number;
+      };
+
+      expect(res.status).toBe(200);
+      expect(json.html).toContain('<h1>alpha</h1>');
+      expect(json.source).toBe('plan.md');
     });
 
-    it('accepts an empty body', async () => {
-      const store = new Store();
-      const app = createApp(store);
-      const res = await app.request('/push', { method: 'POST', body: '' });
-      expect(res.status).toBe(200);
-      expect(store.get().markdown).toBe('');
+    it('returns 404 for an unknown id', async () => {
+      const app = createApp(new Store());
+      const res = await app.request('/api/snapshot/missing');
+      expect(res.status).toBe(404);
     });
   });
 

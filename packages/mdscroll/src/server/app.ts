@@ -1,7 +1,7 @@
 import { serve, type ServerType } from '@hono/node-server';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
-import { Store } from '../store/state.js';
+import { type Snapshot, Store, toMeta } from '../store/state.js';
 import { CLIENT_JS, INDEX_HTML, STYLES_CSS } from './client.js';
 import { render } from './render.js';
 
@@ -22,13 +22,14 @@ export type ServerHandle = {
   close: () => Promise<void>;
 };
 
+const renderCurrent = (current: Snapshot | null): Promise<string> =>
+  render(current?.markdown ?? EMPTY_PLACEHOLDER);
+
 export const createApp = (store: Store): Hono => {
   const app = new Hono();
 
   app.get('/', async (c) => {
-    const snapshot = store.get();
-    const source = snapshot.markdown || EMPTY_PLACEHOLDER;
-    const html = await render(source);
+    const html = await renderCurrent(store.current());
     const page = INDEX_HTML.replace('{{CONTENT}}', html);
     return c.html(page);
   });
@@ -47,28 +48,43 @@ export const createApp = (store: Store): Hono => {
 
   app.post('/push', async (c) => {
     const body = await c.req.text();
-    const snapshot = store.set(body);
-    return c.json({ ok: true, version: snapshot.version });
+    const source = c.req.header('X-Mdscroll-Source') ?? 'unknown';
+    const snapshot = store.push(body, source);
+    return c.json({ ok: true, id: snapshot.id });
+  });
+
+  app.get('/api/snapshot/:id', async (c) => {
+    const id = c.req.param('id');
+    const snapshot = store.byId(id);
+    if (!snapshot) return c.json({ error: 'not found' }, 404);
+    const html = await render(snapshot.markdown);
+    return c.json({
+      html,
+      source: snapshot.source,
+      createdAt: snapshot.createdAt,
+    });
   });
 
   app.get('/events', (c) => {
     return streamSSE(c, async (stream) => {
-      const sendSnapshot = async (markdown: string, version: number) => {
-        const source = markdown || EMPTY_PLACEHOLDER;
-        const html = await render(source);
+      const sendUpdate = async (current: Snapshot | null) => {
+        const html = await renderCurrent(current);
         await stream.writeSSE({
           event: 'update',
-          data: JSON.stringify({ html, version }),
+          data: JSON.stringify({
+            html,
+            current: current ? toMeta(current) : null,
+            history: store.history().map(toMeta),
+          }),
         });
       };
 
-      const initial = store.get();
-      await sendSnapshot(initial.markdown, initial.version);
+      await sendUpdate(store.current());
 
       let aborted = false;
       const unsubscribe = store.subscribe((snapshot) => {
         if (aborted) return;
-        void sendSnapshot(snapshot.markdown, snapshot.version);
+        void sendUpdate(snapshot);
       });
 
       await new Promise<void>((resolve) => {
