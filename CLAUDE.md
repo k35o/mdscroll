@@ -39,7 +39,7 @@ CLI push → POST /push → Store.set → listeners → SSE writeSSE → browser
 ```bash
 pnpm install          # respects minimumReleaseAge (7d), verifyDepsBeforeRun: install
 pnpm build            # vp run -r build (→ vp pack → tsdown → dist/cli.mjs with shebang)
-pnpm test             # vitest (~350ms, 68 tests)
+pnpm test             # vitest (~350ms, 78 tests)
 pnpm typecheck        # tsc --noEmit
 pnpm check            # oxlint + oxfmt
 pnpm check:write      # auto-fix
@@ -61,10 +61,11 @@ pnpm -F mdscroll dev      # vp pack --watch
 - **Single quotes** (oxfmt).
 - **No emojis** in source or docs unless explicitly requested.
 - **`catalog:`** for every shared dep. New deps must have a version published ≥ 7 days ago (`minimumReleaseAge: 10080`).
+- **English only** for all in-repo text (SKILL.md content, tests, comments, docs) — this is a public npm package.
 - **Testing philosophy**: see `~/.claude/skills/testing/`. Summary:
   - AAA (Arrange-Act-Assert) structure
   - 1 test 1 behavior
-  - Japanese `describe` / `it` names describing behavior, not implementation
+  - `describe` / `it` names describe behavior, not implementation
   - Per-test isolation (e.g. `tmpdir` for lockfile tests)
   - Avoid self-fulfilling assertions (don't recompute the expected in the test)
 

@@ -6,226 +6,226 @@ beforeAll(async () => {
 }, 30_000);
 
 describe('render', () => {
-  describe('見出し', () => {
-    it('# から <h1> を生成する', async () => {
+  describe('headings', () => {
+    it('renders # as <h1>', async () => {
       const html = await render('# Title');
       expect(html).toContain('<h1>Title</h1>');
     });
 
-    it('## から <h2> を生成する', async () => {
+    it('renders ## as <h2>', async () => {
       const html = await render('## Sub');
       expect(html).toContain('<h2>Sub</h2>');
     });
 
-    it('###### まで対応する', async () => {
+    it('supports up to ######', async () => {
       const html = await render('###### Six');
       expect(html).toContain('<h6>Six</h6>');
     });
 
-    it('####### は <h6> 相当にはならず段落になる', async () => {
+    it('falls back to paragraph for more than 6 hashes', async () => {
       const html = await render('####### Too many');
       expect(html).toContain('<p>####### Too many</p>');
     });
   });
 
-  describe('インライン修飾', () => {
-    it('**bold** を <strong> にする', async () => {
-      const html = await render('**太字**');
-      expect(html).toContain('<strong>太字</strong>');
+  describe('inline formatting', () => {
+    it('wraps **text** in <strong>', async () => {
+      const html = await render('**bold**');
+      expect(html).toContain('<strong>bold</strong>');
     });
 
-    it('*italic* を <em> にする', async () => {
-      const html = await render('*斜体*');
-      expect(html).toContain('<em>斜体</em>');
+    it('wraps *text* in <em>', async () => {
+      const html = await render('*italic*');
+      expect(html).toContain('<em>italic</em>');
     });
 
-    it('~~strike~~ を <s> にする', async () => {
-      const html = await render('~~消す~~');
-      expect(html).toContain('<s>消す</s>');
+    it('wraps ~~text~~ in <s>', async () => {
+      const html = await render('~~strike~~');
+      expect(html).toContain('<s>strike</s>');
     });
 
-    it('`code` を <code> にする', async () => {
+    it('wraps `code` in <code>', async () => {
       const html = await render('`inline`');
       expect(html).toContain('<code>inline</code>');
     });
   });
 
-  describe('リンク / 画像', () => {
-    it('[text](url) を <a> にする', async () => {
+  describe('links and images', () => {
+    it('renders [text](url) as <a>', async () => {
       const html = await render('[Sharp](https://sharp.example)');
       expect(html).toContain('<a href="https://sharp.example">Sharp</a>');
     });
 
-    it('linkify で裸 URL も <a> になる', async () => {
+    it('linkifies bare URLs', async () => {
       const html = await render('Visit https://example.com now');
       expect(html).toContain('<a href="https://example.com">https://example.com</a>');
     });
 
-    it('![alt](src) を <img> にする', async () => {
+    it('renders ![alt](src) as <img>', async () => {
       const html = await render('![logo](/a.png)');
       expect(html).toContain('<img src="/a.png" alt="logo">');
     });
   });
 
-  describe('リスト', () => {
-    it('- で <ul><li> を作る', async () => {
+  describe('lists', () => {
+    it('renders - as <ul><li>', async () => {
       const html = await render('- one\n- two');
       expect(html).toContain('<ul>');
       expect(html).toContain('<li>one</li>');
     });
 
-    it('1. で <ol><li> を作る', async () => {
+    it('renders 1. as <ol><li>', async () => {
       const html = await render('1. a\n2. b');
       expect(html).toContain('<ol>');
     });
 
-    describe('タスクリスト', () => {
-      it('[x] はチェック済みの checkbox になる', async () => {
+    describe('task lists', () => {
+      it('renders [x] as a checked checkbox', async () => {
         const html = await render('- [x] done');
         expect(html).toMatch(/<input[^>]*checked[^>]*>/);
       });
 
-      it('[ ] は未チェックの checkbox になる', async () => {
+      it('renders [ ] as an unchecked checkbox', async () => {
         const html = await render('- [ ] todo');
         expect(html).toMatch(/<input[^>]*type="checkbox"[^>]*>/);
         expect(html).not.toMatch(/<input[^>]*type="checkbox"[^>]*checked/);
       });
 
-      it('<ul> に contains-task-list クラスが付く', async () => {
+      it('adds contains-task-list to the <ul>', async () => {
         const html = await render('- [x] a');
         expect(html).toContain('contains-task-list');
       });
 
-      it('<li> に task-list-item クラスが付く', async () => {
+      it('adds task-list-item to the <li>', async () => {
         const html = await render('- [x] a');
         expect(html).toContain('task-list-item');
       });
     });
   });
 
-  describe('テーブル', () => {
-    const table = ['| 列A | 列B |', '|-----|-----|', '| v1  | v2  |'].join('\n');
+  describe('tables', () => {
+    const table = ['| Col A | Col B |', '|-------|-------|', '| v1    | v2    |'].join('\n');
 
-    it('<table><thead><tbody> を生成する', async () => {
+    it('renders <table><thead><tbody>', async () => {
       const html = await render(table);
       expect(html).toContain('<table>');
       expect(html).toContain('<thead>');
       expect(html).toContain('<tbody>');
     });
 
-    it('ヘッダーは <th> でラップされる', async () => {
+    it('wraps header cells in <th>', async () => {
       const html = await render(table);
-      expect(html).toContain('<th>列A</th>');
+      expect(html).toContain('<th>Col A</th>');
     });
 
-    it('本文は <td> でラップされる', async () => {
+    it('wraps body cells in <td>', async () => {
       const html = await render(table);
       expect(html).toContain('<td>v1</td>');
     });
   });
 
-  describe('ブロック引用', () => {
-    it('> から <blockquote> を作る', async () => {
-      const html = await render('> 引用');
+  describe('blockquote', () => {
+    it('renders > as <blockquote>', async () => {
+      const html = await render('> quoted');
       expect(html).toContain('<blockquote>');
     });
   });
 
-  describe('コードブロック', () => {
-    it('フェンスで <pre> を作る', async () => {
+  describe('code blocks', () => {
+    it('renders a fence as <pre>', async () => {
       const html = await render('```\nraw\n```');
       expect(html).toContain('<pre');
     });
 
-    it('言語指定ありは shiki でハイライトされる', async () => {
+    it('highlights with shiki when a language is specified', async () => {
       const html = await render('```typescript\nconst x = 1;\n```');
       expect(html).toContain('class="shiki');
     });
 
-    it('未知の言語は text としてハイライトされる', async () => {
+    it('falls back to plain text highlighting for unknown languages', async () => {
       const html = await render('```unknown-lang\nraw\n```');
       expect(html).toContain('class="shiki');
     });
 
-    it('mermaid ブロックは pre.mermaid として出力される', async () => {
+    it('emits <pre class="mermaid"> for mermaid blocks', async () => {
       const html = await render('```mermaid\nflowchart LR\nA-->B\n```');
       expect(html).toContain('<pre class="mermaid">');
     });
 
-    it('mermaid ブロックの中身はエスケープされる', async () => {
+    it('escapes HTML inside mermaid blocks', async () => {
       const html = await render('```mermaid\nA[<evil>]-->B\n```');
       expect(html).toContain('&lt;evil&gt;');
       expect(html).not.toContain('<evil>');
     });
 
-    it('mermaid ブロックには shiki の <code> は付かない', async () => {
+    it('does not apply shiki to mermaid blocks', async () => {
       const html = await render('```mermaid\nflowchart\n```');
       expect(html).not.toContain('class="shiki');
     });
   });
 
-  describe('GFM Alert', () => {
-    it('[!NOTE] は markdown-alert-note を付ける', async () => {
+  describe('GFM alerts', () => {
+    it('adds markdown-alert-note for [!NOTE]', async () => {
       const html = await render('> [!NOTE]\n> memo');
       expect(html).toContain('markdown-alert-note');
     });
 
-    it('[!TIP] は markdown-alert-tip を付ける', async () => {
+    it('adds markdown-alert-tip for [!TIP]', async () => {
       const html = await render('> [!TIP]\n> hint');
       expect(html).toContain('markdown-alert-tip');
     });
 
-    it('[!WARNING] は markdown-alert-warning を付ける', async () => {
+    it('adds markdown-alert-warning for [!WARNING]', async () => {
       const html = await render('> [!WARNING]\n> careful');
       expect(html).toContain('markdown-alert-warning');
     });
 
-    it('[!IMPORTANT] は markdown-alert-important を付ける', async () => {
+    it('adds markdown-alert-important for [!IMPORTANT]', async () => {
       const html = await render('> [!IMPORTANT]\n> read me');
       expect(html).toContain('markdown-alert-important');
     });
 
-    it('[!CAUTION] は markdown-alert-caution を付ける', async () => {
+    it('adds markdown-alert-caution for [!CAUTION]', async () => {
       const html = await render('> [!CAUTION]\n> danger');
       expect(html).toContain('markdown-alert-caution');
     });
 
-    it('対応外のマーカーは通常の blockquote になる', async () => {
+    it('treats unknown markers as a plain blockquote', async () => {
       const html = await render('> [!UNKNOWN]\n> body');
       expect(html).not.toContain('markdown-alert');
       expect(html).toContain('<blockquote>');
     });
   });
 
-  describe('水平線', () => {
-    it('--- は <hr> になる', async () => {
+  describe('horizontal rule', () => {
+    it('renders --- as <hr>', async () => {
       const html = await render('---');
       expect(html).toContain('<hr>');
     });
   });
 
-  describe('安全性', () => {
-    it('html: false なので <script> は素通しされず段落になる', async () => {
+  describe('safety', () => {
+    it('does not pass raw <script> through (html: false)', async () => {
       const html = await render('<script>alert(1)</script>');
       expect(html).not.toContain('<script>alert(1)</script>');
     });
 
-    it('javascript: スキームのリンクは拒否される', async () => {
+    it('rejects javascript: URLs', async () => {
       const html = await render('[click](javascript:alert(1))');
       expect(html).not.toContain('href="javascript:');
     });
   });
 
-  describe('境界値', () => {
-    it('空文字列は空文字列を返す', async () => {
+  describe('boundaries', () => {
+    it('returns an empty string for empty input', async () => {
       expect(await render('')).toBe('');
     });
 
-    it('改行のみは空文字列を返す', async () => {
+    it('returns an empty string for whitespace-only input', async () => {
       expect(await render('\n\n')).toBe('');
     });
 
-    it('プレーンテキストは <p> で囲まれる', async () => {
+    it('wraps plain text in <p>', async () => {
       const html = await render('hello');
       expect(html).toBe('<p>hello</p>\n');
     });

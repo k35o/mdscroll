@@ -9,30 +9,30 @@ beforeAll(async () => {
 
 describe('createApp', () => {
   describe('GET /', () => {
-    it('HTML ドキュメントを返す', async () => {
+    it('returns an HTML document', async () => {
       const app = createApp(new Store());
       const res = await app.request('/');
       expect(res.status).toBe(200);
       expect(res.headers.get('content-type')).toMatch(/text\/html/);
     });
 
-    it('コンテンツが空ならプレースホルダを表示する', async () => {
+    it('shows the placeholder when the store is empty', async () => {
       const app = createApp(new Store());
       const res = await app.request('/');
       const body = await res.text();
       expect(body).toContain('No content yet');
     });
 
-    it('Store に入った markdown をレンダリングして埋め込む', async () => {
+    it('renders and embeds the markdown from the store', async () => {
       const store = new Store();
-      store.set('# Hello 世界');
+      store.set('# Hello World');
       const app = createApp(store);
       const res = await app.request('/');
       const body = await res.text();
-      expect(body).toContain('<h1>Hello 世界</h1>');
+      expect(body).toContain('<h1>Hello World</h1>');
     });
 
-    it('スタイルシートへのリンクを含む', async () => {
+    it('includes a link to the stylesheet', async () => {
       const app = createApp(new Store());
       const body = await (await app.request('/')).text();
       expect(body).toContain('href="/style.css"');
@@ -40,7 +40,7 @@ describe('createApp', () => {
   });
 
   describe('GET /style.css', () => {
-    it('CSS を text/css で返す', async () => {
+    it('returns CSS with a text/css content type', async () => {
       const app = createApp(new Store());
       const res = await app.request('/style.css');
       expect(res.status).toBe(200);
@@ -49,14 +49,14 @@ describe('createApp', () => {
   });
 
   describe('GET /main.js', () => {
-    it('JS を application/javascript で返す', async () => {
+    it('returns JS with an application/javascript content type', async () => {
       const app = createApp(new Store());
       const res = await app.request('/main.js');
       expect(res.status).toBe(200);
       expect(res.headers.get('content-type')).toMatch(/application\/javascript/);
     });
 
-    it('SSE クライアントコードを含む', async () => {
+    it('includes the SSE client code', async () => {
       const app = createApp(new Store());
       const body = await (await app.request('/main.js')).text();
       expect(body).toContain("new EventSource('/events')");
@@ -64,7 +64,7 @@ describe('createApp', () => {
   });
 
   describe('POST /push', () => {
-    it('body の内容で Store を更新する', async () => {
+    it('updates the store with the request body', async () => {
       const store = new Store();
       const app = createApp(store);
       await app.request('/push', {
@@ -74,7 +74,7 @@ describe('createApp', () => {
       expect(store.get().markdown).toBe('# Pushed');
     });
 
-    it('更新後の version を返す', async () => {
+    it('returns the new version number', async () => {
       const store = new Store();
       const app = createApp(store);
       const res = await app.request('/push', { method: 'POST', body: 'a' });
@@ -82,7 +82,7 @@ describe('createApp', () => {
       expect(json).toEqual({ ok: true, version: 1 });
     });
 
-    it('複数回の push で version が進む', async () => {
+    it('advances the version on each push', async () => {
       const store = new Store();
       const app = createApp(store);
       await app.request('/push', { method: 'POST', body: 'a' });
@@ -92,7 +92,7 @@ describe('createApp', () => {
       expect(json.version).toBe(3);
     });
 
-    it('空 body も受け付ける', async () => {
+    it('accepts an empty body', async () => {
       const store = new Store();
       const app = createApp(store);
       const res = await app.request('/push', { method: 'POST', body: '' });
@@ -101,8 +101,8 @@ describe('createApp', () => {
     });
   });
 
-  describe('未定義ルート', () => {
-    it('GET /unknown は 404 を返す', async () => {
+  describe('unknown routes', () => {
+    it('returns 404 for GET /unknown', async () => {
       const app = createApp(new Store());
       const res = await app.request('/unknown');
       expect(res.status).toBe(404);

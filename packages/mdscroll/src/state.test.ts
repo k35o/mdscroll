@@ -2,26 +2,26 @@ import { describe, expect, it, vi } from 'vitest';
 import { Store } from './state.js';
 
 describe('Store', () => {
-  describe('初期状態', () => {
-    it('markdown は空文字列で始まる', () => {
+  describe('initial state', () => {
+    it('starts with an empty markdown string', () => {
       const store = new Store();
       expect(store.get().markdown).toBe('');
     });
 
-    it('version は 0 で始まる', () => {
+    it('starts at version 0', () => {
       const store = new Store();
       expect(store.get().version).toBe(0);
     });
   });
 
   describe('set', () => {
-    it('markdown を更新する', () => {
+    it('updates the markdown', () => {
       const store = new Store();
       store.set('# hello');
       expect(store.get().markdown).toBe('# hello');
     });
 
-    it('呼び出しごとに version をインクリメントする', () => {
+    it('increments the version on every call', () => {
       const store = new Store();
       store.set('a');
       store.set('b');
@@ -29,14 +29,14 @@ describe('Store', () => {
       expect(store.get().version).toBe(3);
     });
 
-    it('更新後のスナップショットを返す', () => {
+    it('returns the snapshot after the update', () => {
       const store = new Store();
       const snapshot = store.set('hello');
       expect(snapshot.markdown).toBe('hello');
       expect(snapshot.version).toBe(1);
     });
 
-    it('空文字列の set でもversionは進む', () => {
+    it('advances the version even when setting an empty string', () => {
       const store = new Store();
       store.set('something');
       store.set('');
@@ -46,7 +46,7 @@ describe('Store', () => {
   });
 
   describe('subscribe', () => {
-    it('set のたびにリスナーが呼ばれる', () => {
+    it('invokes the listener on every set', () => {
       const store = new Store();
       const listener = vi.fn();
       store.subscribe(listener);
@@ -57,7 +57,7 @@ describe('Store', () => {
       expect(listener).toHaveBeenCalledTimes(2);
     });
 
-    it('リスナーには新しいスナップショットが渡される', () => {
+    it('passes the new snapshot to the listener', () => {
       const store = new Store();
       const listener = vi.fn();
       store.subscribe(listener);
@@ -69,7 +69,7 @@ describe('Store', () => {
       );
     });
 
-    it('複数のリスナーが全員呼ばれる', () => {
+    it('notifies all registered listeners', () => {
       const store = new Store();
       const a = vi.fn();
       const b = vi.fn();
@@ -82,7 +82,7 @@ describe('Store', () => {
       expect(b).toHaveBeenCalledOnce();
     });
 
-    it('返される解除関数でリスナーを外せる', () => {
+    it('stops notifying after the returned unsubscribe is called', () => {
       const store = new Store();
       const listener = vi.fn();
       const unsubscribe = store.subscribe(listener);

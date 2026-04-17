@@ -16,18 +16,18 @@ describe('lockfile', () => {
   });
 
   describe('readLock', () => {
-    it('ファイルが存在しない場合は null を返す', async () => {
+    it('returns null when the file does not exist', async () => {
       const result = await readLock(dir);
       expect(result).toBeNull();
     });
 
-    it('JSON が壊れている場合は null を返す', async () => {
+    it('returns null when the JSON is malformed', async () => {
       await writeFile(join(dir, 'server.lock'), 'not-json');
       const result = await readLock(dir);
       expect(result).toBeNull();
     });
 
-    it('生存中のプロセスの lock を返す', async () => {
+    it('returns the lock when the pid is alive', async () => {
       await writeLock(
         {
           pid: process.pid,
@@ -46,7 +46,7 @@ describe('lockfile', () => {
       });
     });
 
-    it('死んでいるプロセスの lock は削除して null を返す', async () => {
+    it('deletes the lock and returns null when the pid is dead', async () => {
       const deadPid = 999999;
       await writeLock(
         {
@@ -67,7 +67,7 @@ describe('lockfile', () => {
   });
 
   describe('writeLock', () => {
-    it('ディレクトリが無くても作成して書き込む', async () => {
+    it('creates the target directory if it does not exist', async () => {
       const nested = join(dir, 'new-sub');
       await writeLock({ pid: process.pid, port: 1, host: 'h', startedAt: 0 }, nested);
       const result = await readLock(nested);
@@ -76,13 +76,13 @@ describe('lockfile', () => {
   });
 
   describe('removeLock', () => {
-    it('存在する lock を削除する', async () => {
+    it('deletes an existing lock', async () => {
       await writeLock({ pid: process.pid, port: 1, host: 'h', startedAt: 0 }, dir);
       await removeLock(dir);
       expect(await readLock(dir)).toBeNull();
     });
 
-    it('ファイルが無くてもエラーにならない', async () => {
+    it('does not throw when the file is already gone', async () => {
       await expect(removeLock(dir)).resolves.toBeUndefined();
     });
   });
