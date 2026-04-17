@@ -1,5 +1,18 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+import { runPush } from './push.js';
+import { runStart } from './start.js';
+
+type StartCliOptions = {
+  port: string;
+  host: string;
+  open: boolean;
+};
+
+type PushCliOptions = {
+  port: string;
+  host: string;
+};
 
 const program = new Command();
 
@@ -14,15 +27,25 @@ program
   .option('-p, --port <port>', 'Port to listen on', '4977')
   .option('-h, --host <host>', 'Host to bind to', '127.0.0.1')
   .option('--no-open', 'Do not open the browser automatically')
-  .action((opts: { port: string; host: string; open: boolean }) => {
-    console.log('start (not implemented yet)', opts);
+  .action(async (opts: StartCliOptions) => {
+    await runStart({
+      port: Number(opts.port),
+      host: opts.host,
+      open: opts.open,
+    });
   });
 
 program
   .command('push [file]')
-  .description('Push markdown content to the running server (file or stdin)')
-  .action((file: string | undefined) => {
-    console.log('push (not implemented yet)', file);
+  .description('Push markdown content to the running server (file path or stdin)')
+  .option('-p, --port <port>', 'Port', '4977')
+  .option('-h, --host <host>', 'Host', '127.0.0.1')
+  .action(async (file: string | undefined, opts: PushCliOptions) => {
+    await runPush({
+      file,
+      port: Number(opts.port),
+      host: opts.host,
+    });
   });
 
-program.parse();
+await program.parseAsync();
