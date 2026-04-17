@@ -9,16 +9,29 @@ catalog:
   '@types/node': 24.12.2
   commander: 14.0.3
   get-port: 7.2.0
-  hono: 4.12.12
+  hono: 4.12.14
   markdown-it: 14.1.1
   markdown-it-github-alerts: 1.0.1
   markdown-it-task-lists: 2.1.1
   shiki: 4.0.2
   skills-ref: 0.1.5
   typescript: 6.0.2
-  vite-plus: 0.1.16
+  vite-plus: 0.1.17
   vitest: 4.1.4
 
 blockExoticSubdeps: true
 minimumReleaseAge: 10080
+minimumReleaseAgeExclude:
+  # hono 4.12.14 patches GHSA-458j-xx4x-4375 (HTML injection in JSX SSR).
+  # Remove after 2026-04-22 when the version clears the 7-day gate.
+  - hono@4.12.14
+  # vite-plus 0.1.17 patches GHSA-33r3-4whc-44c2 (path traversal). Its
+  # ecosystem was republished the same day at matching versions.
+  # Remove each entry when its own age catches up.
+  - vite-plus@0.1.17
+  - '@voidzero-dev/*@0.1.17'
+  - oxfmt@0.45.0
+  - '@oxfmt/*@0.45.0'
+  - oxlint@1.60.0
+  - '@oxlint/*@1.60.0'
 verifyDepsBeforeRun: install
