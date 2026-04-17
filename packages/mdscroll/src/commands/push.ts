@@ -1,11 +1,9 @@
-import { spawn } from 'node:child_process';
-import { openSync } from 'node:fs';
-import { mkdir, readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { join, relative, resolve } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { relative, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { fileURLToPath } from 'node:url';
 import { DEFAULT_INSTANCE_NAME, readLock, removeLock } from '../store/lockfile.js';
+import { postPush } from './http.js';
+import { spawnDetachedServer, tailLog } from './spawn.js';
 
 export const sourceFor = (file: string | undefined): string => {
   if (!file) return 'stdin';
@@ -37,75 +35,15 @@ const readStdin = async (): Promise<string> => {
 const browserUrl = (host: string, port: number): string => `http://${host}:${port}/`;
 const pushEndpoint = (host: string, port: number): string => `http://${host}:${port}/push`;
 
-const spawnLogPath = (name: string): string => join(homedir(), '.mdscroll', `${name}.log`);
-
-export type PostResult =
-  | { kind: 'ok' }
-  | { kind: 'rejected'; status: number; detail?: string }
-  | { kind: 'unreachable' };
-
-export const tryPost = async (url: string, body: string, source: string): Promise<PostResult> => {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'X-Mdscroll-Source': source,
-      },
-      body,
-    });
-  } catch {
-    // Connection refused, DNS failure, socket reset — the server is
-    // not answering at all, so it is reasonable to treat this as a
-    // stale lock.
-    return { kind: 'unreachable' };
-  }
-  if (response.ok) return { kind: 'ok' };
-  // The server was reached and returned an error. The instance is
-  // alive and should NOT be treated as stale — leave its lock in
-  // place. Try to surface a body snippet for diagnostics.
-  let detail: string | undefined;
-  try {
-    detail = (await response.text()).slice(0, 200);
-  } catch {
-    detail = undefined;
-  }
-  return { kind: 'rejected', status: response.status, detail };
-};
-
-const spawnServer = async (name: string, port: number, host: string): Promise<string> => {
-  const logPath = spawnLogPath(name);
-  await mkdir(join(logPath, '..'), { recursive: true });
-  // Truncate prior logs each time we spawn so users only see the
-  // current attempt's output.
-  const fd = openSync(logPath, 'w');
-  const cliPath = fileURLToPath(import.meta.url);
-  const args = [cliPath, 'start', '--name', name, '--host', host, '--port', String(port)];
-  const child = spawn(process.execPath, args, {
-    detached: true,
-    stdio: ['ignore', fd, fd],
-  });
-  child.unref();
-  return logPath;
-};
-
 // Poll the lockfile after spawning the server to learn the port it
 // actually bound to. 30 × 150ms = ~4.5s, which covers Shiki warmup on
 // a cold cache while staying well under a typical CLI timeout budget.
 const POLL_ATTEMPTS = 30;
 const POLL_INTERVAL_MS = 150;
+const POLL_BUDGET_SECONDS = (POLL_ATTEMPTS * POLL_INTERVAL_MS) / 1000;
 
-const tailLog = async (path: string, lines = 10): Promise<string | null> => {
-  try {
-    const content = await readFile(path, 'utf-8');
-    if (!content.trim()) return null;
-    const parts = content.split(/\r?\n/);
-    return parts.slice(-lines).join('\n').trim();
-  } catch {
-    return null;
-  }
-};
+const formatRejection = (prefix: string, status: number, detail: string | undefined): string =>
+  `${prefix} ${status}${detail ? `: ${detail}` : ''}\n`;
 
 export const runPush = async (opts: PushOptions): Promise<void> => {
   const name = opts.name ?? DEFAULT_INSTANCE_NAME;
@@ -121,7 +59,7 @@ export const runPush = async (opts: PushOptions): Promise<void> => {
 
   const existing = await readLock(name, opts.dir);
   if (existing) {
-    const result = await tryPost(pushEndpoint(existing.host, existing.port), content, source);
+    const result = await postPush(pushEndpoint(existing.host, existing.port), content, source);
     if (result.kind === 'ok') {
       process.stdout.write(
         `mdscroll[${name}]: pushed to ${browserUrl(existing.host, existing.port)}\n`,
@@ -130,11 +68,13 @@ export const runPush = async (opts: PushOptions): Promise<void> => {
     }
     if (result.kind === 'rejected') {
       // Server answered with a 4xx/5xx — it is alive and intentionally
-      // refusing this push. Keep the lock, surface the status, and exit 1.
+      // refusing this push. Keep the lock, surface the status, exit 1.
       process.stderr.write(
-        `mdscroll[${name}]: server rejected push with ${result.status}${
-          result.detail ? `: ${result.detail}` : ''
-        }\n`,
+        formatRejection(
+          `mdscroll[${name}]: server rejected push with`,
+          result.status,
+          result.detail,
+        ),
       );
       process.exitCode = 1;
       return;
@@ -143,13 +83,17 @@ export const runPush = async (opts: PushOptions): Promise<void> => {
     await removeLock(name, opts.dir);
   }
 
-  const logPath = await spawnServer(name, opts.port, opts.host);
+  const { logPath } = await spawnDetachedServer({
+    name,
+    port: opts.port,
+    host: opts.host,
+  });
 
   for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt += 1) {
     await sleep(POLL_INTERVAL_MS);
     const lock = await readLock(name, opts.dir);
     if (!lock) continue;
-    const result = await tryPost(pushEndpoint(lock.host, lock.port), content, source);
+    const result = await postPush(pushEndpoint(lock.host, lock.port), content, source);
     if (result.kind === 'ok') {
       process.stdout.write(
         `mdscroll[${name}]: started server and pushed to ${browserUrl(lock.host, lock.port)}\n`,
@@ -157,11 +101,12 @@ export const runPush = async (opts: PushOptions): Promise<void> => {
       return;
     }
     if (result.kind === 'rejected') {
-      // Freshly-spawned server is live but rejecting — no point in polling.
       process.stderr.write(
-        `mdscroll[${name}]: spawned server rejected push with ${result.status}${
-          result.detail ? `: ${result.detail}` : ''
-        }\n`,
+        formatRejection(
+          `mdscroll[${name}]: spawned server rejected push with`,
+          result.status,
+          result.detail,
+        ),
       );
       process.exitCode = 1;
       return;
@@ -170,7 +115,7 @@ export const runPush = async (opts: PushOptions): Promise<void> => {
 
   const tail = await tailLog(logPath);
   process.stderr.write(
-    `mdscroll[${name}]: failed to reach the spawned server within ${(POLL_ATTEMPTS * POLL_INTERVAL_MS) / 1000}s\n`,
+    `mdscroll[${name}]: failed to reach the spawned server within ${POLL_BUDGET_SECONDS}s\n`,
   );
   if (tail) {
     process.stderr.write(

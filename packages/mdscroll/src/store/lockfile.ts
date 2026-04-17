@@ -4,7 +4,7 @@ import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_INSTANCE_NAME } from '../constants.js';
-import { isValidInstanceName } from '../instance-name.js';
+import { isValidInstanceName } from './instance-name.js';
 
 export { DEFAULT_INSTANCE_NAME };
 

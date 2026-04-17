@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readLock, writeLock } from '../store/lockfile.js';
-import { runPush, sourceFor, tryPost } from './push.js';
+import { postPush } from './http.js';
+import { runPush, sourceFor } from './push.js';
 
 describe('sourceFor', () => {
   let originalCwd: string;
@@ -102,7 +103,7 @@ const spawnStubServer = async (status: number): Promise<FakeServer> => {
   };
 };
 
-describe('tryPost', () => {
+describe('postPush', () => {
   const fakes: FakeServer[] = [];
   afterEach(() => {
     for (const fake of fakes.splice(0)) fake.close();
@@ -138,14 +139,14 @@ describe('tryPost', () => {
       },
     });
 
-    const result = await tryPost(`http://127.0.0.1:${port}/push`, 'hi', 'test');
+    const result = await postPush(`http://127.0.0.1:${port}/push`, 'hi', 'test');
     expect(result.kind).toBe('ok');
   });
 
   it('returns { kind: "rejected", status } on 4xx/5xx', async () => {
     const fake = await spawnStubServer(413);
     fakes.push(fake);
-    const result = await tryPost(`http://127.0.0.1:${fake.port}/push`, 'hi', 'test');
+    const result = await postPush(`http://127.0.0.1:${fake.port}/push`, 'hi', 'test');
     expect(result.kind).toBe('rejected');
     if (result.kind === 'rejected') {
       expect(result.status).toBe(413);
@@ -155,7 +156,7 @@ describe('tryPost', () => {
 
   it('returns { kind: "unreachable" } when the connection fails', async () => {
     // Port 1 is privileged; fetch will refuse.
-    const result = await tryPost('http://127.0.0.1:1/push', 'hi', 'test');
+    const result = await postPush('http://127.0.0.1:1/push', 'hi', 'test');
     expect(result.kind).toBe('unreachable');
   });
 });

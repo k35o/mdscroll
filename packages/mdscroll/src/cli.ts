@@ -7,7 +7,7 @@ import { runPush } from './commands/push.js';
 import { runStart } from './commands/start.js';
 import { runStop } from './commands/stop.js';
 import { DEFAULT_HOST, DEFAULT_INSTANCE_NAME, DEFAULT_PORT } from './constants.js';
-import { assertValidInstanceName } from './instance-name.js';
+import { assertValidInstanceName } from './store/instance-name.js';
 
 const pkg = JSON.parse(
   readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf-8'),
