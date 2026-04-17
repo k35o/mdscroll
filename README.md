@@ -15,7 +15,7 @@ mdscroll push plan.md            # or push a file
 - **Workspace**: pnpm 10 with catalog. `minimumReleaseAge: 10080` (7 days) gates new deps.
 - **Toolchain**: [vite-plus](https://viteplus.dev) (`vp`) — build (tsdown), lint/format (oxlint + oxfmt), task running
 - **Runtime** (contributors): Node 24.14.1 via mise. The **published package** targets `node >= 20`.
-- **Core**: [Hono](https://hono.dev), [markdown-it](https://github.com/markdown-it/markdown-it), [Shiki](https://shiki.style), [Mermaid](https://mermaid.js.org) (client-side, self-hosted)
+- **Core**: [Hono](https://hono.dev), [markdown-it](https://github.com/markdown-it/markdown-it), [Shiki](https://shiki.style), [Mermaid](https://mermaid.js.org) (loaded client-side from a pinned jsDelivr URL and gated by a strict Content-Security-Policy)
 - **Tests**: [Vitest](https://vitest.dev) covering renderer, state, lockfile, server routes, commands, and integration flow
 
 ## Development
