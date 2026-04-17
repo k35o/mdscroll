@@ -55,6 +55,9 @@ const spawnServer = (name: string, port: number, host: string): void => {
   child.unref();
 };
 
+// Poll the lockfile after spawning the server to learn the port it
+// actually bound to. 30 × 150ms = ~4.5s, which covers Shiki warmup on
+// a cold cache while staying well under a typical CLI timeout budget.
 const POLL_ATTEMPTS = 30;
 const POLL_INTERVAL_MS = 150;
 
