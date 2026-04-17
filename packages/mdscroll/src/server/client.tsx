@@ -1,104 +1,27 @@
 import type { FC } from 'hono/jsx';
 
-// The popover API "Invokers" attributes (`command`, `commandfor`) are
-// newer than the stock JSX types. Declare them as allowed on <button>.
-declare module 'hono/jsx' {
-  namespace JSX {
-    interface HTMLAttributes {
-      command?: string;
-      commandfor?: string;
-    }
-  }
-}
-
 type DocumentProps = {
   /** Pre-rendered HTML (from markdown-it + shiki) inlined into <article>. */
   contentHtml: string;
+  /** Label shown in the header describing what we're looking at. */
+  source: string;
 };
 
-const PanelIcon: FC = () => (
-  <svg
-    viewBox="0 0 16 16"
-    width="14"
-    height="14"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="1.5"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    aria-hidden="true"
-  >
-    <rect x="2" y="3" width="12" height="10" rx="1.5" />
-    <line x1="6" y1="3" x2="6" y2="13" />
-  </svg>
-);
+type HeaderProps = { source: string };
 
-const CloseIcon: FC = () => (
-  <svg
-    viewBox="0 0 16 16"
-    width="14"
-    height="14"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="1.5"
-    stroke-linecap="round"
-    aria-hidden="true"
-  >
-    <line x1="3.5" y1="3.5" x2="12.5" y2="12.5" />
-    <line x1="12.5" y1="3.5" x2="3.5" y2="12.5" />
-  </svg>
-);
-
-const Header: FC = () => (
-  <header class="mdscroll-header">
+const Header: FC<HeaderProps> = ({ source }) => (
+  <header class="mdscroll-shell-header">
     <span class="mdscroll-brand">mdscroll</span>
-    <div class="mdscroll-actions">
-      <button id="mdscroll-live" class="mdscroll-live" hidden>
-        Back to live
-      </button>
-      <button
-        class="mdscroll-icon-button"
-        type="button"
-        command="toggle-popover"
-        commandfor="mdscroll-history-drawer"
-        aria-label="Toggle history"
-      >
-        <PanelIcon />
-      </button>
-      <span class="mdscroll-status" id="mdscroll-status" data-state="idle">
-        idle
-      </span>
-    </div>
+    <span class="mdscroll-source" id="mdscroll-source" title={source}>
+      {source}
+    </span>
+    <span class="mdscroll-status" id="mdscroll-status" data-state="idle">
+      idle
+    </span>
   </header>
 );
 
-const HistoryDrawer: FC = () => (
-  <aside
-    id="mdscroll-history-drawer"
-    class="mdscroll-drawer"
-    // Light dismiss: Esc + click-outside close automatically.
-    popover="auto"
-    aria-label="History"
-  >
-    <header class="mdscroll-drawer-header">
-      <span class="mdscroll-drawer-title">History</span>
-      <button
-        class="mdscroll-icon-button"
-        type="button"
-        command="hide-popover"
-        commandfor="mdscroll-history-drawer"
-        aria-label="Close history"
-      >
-        <CloseIcon />
-      </button>
-    </header>
-    <ul id="mdscroll-history" class="mdscroll-history">
-      <li class="mdscroll-history-empty">No pushes yet</li>
-    </ul>
-  </aside>
-);
-
-export const Document: FC<DocumentProps> = ({ contentHtml }) => (
+export const Document: FC<DocumentProps> = ({ contentHtml, source }) => (
   <html lang="en">
     <head>
       <meta charset="utf-8" />
@@ -108,7 +31,7 @@ export const Document: FC<DocumentProps> = ({ contentHtml }) => (
     </head>
     <body>
       <div class="mdscroll-shell">
-        <Header />
+        <Header source={source} />
         <main class="mdscroll-main">
           <article
             id="mdscroll-content"
@@ -120,7 +43,6 @@ export const Document: FC<DocumentProps> = ({ contentHtml }) => (
           />
         </main>
       </div>
-      <HistoryDrawer />
       <script type="module" src="/main.js" />
     </body>
   </html>
@@ -175,10 +97,10 @@ body {
   margin: 0 auto;
   padding: 0 24px;
 }
-.mdscroll-header {
+.mdscroll-shell-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 16px;
   padding: 20px 0;
   border-bottom: 1px solid var(--border-mute);
   margin-bottom: 32px;
@@ -188,48 +110,20 @@ body {
   letter-spacing: 0.02em;
   color: var(--fg-mute);
   font-size: 14px;
+  flex-shrink: 0;
 }
-.mdscroll-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.mdscroll-live {
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--accent);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 3px 10px;
-  cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease;
-}
-.mdscroll-live:hover {
-  background: var(--bg-raised);
-  border-color: var(--accent);
-}
-.mdscroll-icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 4px;
+.mdscroll-source {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
   color: var(--fg-mute);
-  cursor: pointer;
-  line-height: 0;
-  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.mdscroll-icon-button:hover {
-  color: var(--fg);
-  background: var(--bg-raised);
-}
-.mdscroll-icon-button[aria-pressed="false"] { color: var(--fg-mute); }
-.mdscroll-icon-button[aria-pressed="true"] { color: var(--fg); }
 .mdscroll-status {
+  flex-shrink: 0;
   font-size: 12px;
   color: var(--status-idle);
   display: inline-flex;
@@ -245,89 +139,6 @@ body {
 .mdscroll-status[data-state="live"] { color: var(--status-live); }
 .mdscroll-main {
   padding-bottom: 96px;
-}
-.mdscroll-drawer {
-  margin: 0;
-  margin-left: auto;
-  inset: 0 0 0 auto;
-  width: min(320px, 86vw);
-  height: 100vh;
-  max-height: 100vh;
-  background: var(--bg);
-  color: var(--fg);
-  border: none;
-  border-left: 1px solid var(--border-mute);
-  box-shadow: -24px 0 48px -24px rgba(0, 0, 0, 0.35);
-  padding: 16px 20px 20px;
-  overflow-y: auto;
-  font-size: 13px;
-  transform: translateX(100%);
-  transition:
-    transform 200ms cubic-bezier(0.2, 0, 0, 1),
-    overlay 200ms allow-discrete,
-    display 200ms allow-discrete;
-}
-.mdscroll-drawer:popover-open { transform: translateX(0); }
-@starting-style {
-  .mdscroll-drawer:popover-open { transform: translateX(100%); }
-}
-.mdscroll-drawer::backdrop {
-  background: rgba(0, 0, 0, 0);
-  transition: background-color 200ms ease;
-}
-.mdscroll-drawer:popover-open::backdrop { background: rgba(0, 0, 0, 0.25); }
-.mdscroll-drawer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-mute);
-}
-.mdscroll-drawer-title {
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--fg-mute);
-  font-weight: 600;
-  font-size: 11px;
-}
-.mdscroll-history {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.mdscroll-history-empty {
-  color: var(--fg-mute);
-  font-style: italic;
-  padding: 6px 0;
-  font-size: 13px;
-}
-.mdscroll-history-item {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  padding: 5px 0;
-  cursor: pointer;
-  color: var(--fg-mute);
-  transition: color 100ms ease;
-}
-.mdscroll-history-item:hover { color: var(--fg); }
-.mdscroll-history-item.is-current { color: var(--fg); }
-.mdscroll-history-time {
-  flex-shrink: 0;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  font-size: 11.5px;
-  font-feature-settings: "tnum";
-  letter-spacing: 0.02em;
-  color: var(--fg-mute);
-}
-.mdscroll-history-item.is-current .mdscroll-history-time { color: var(--accent); }
-.mdscroll-history-source {
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .markdown-body { font-size: 16px; line-height: 1.6; word-wrap: break-word; }
 .markdown-body > *:first-child { margin-top: 0; }
@@ -467,9 +278,8 @@ body {
 `;
 
 export const CLIENT_JS = `const statusEl = document.getElementById('mdscroll-status');
+const sourceEl = document.getElementById('mdscroll-source');
 const contentEl = document.getElementById('mdscroll-content');
-const historyEl = document.getElementById('mdscroll-history');
-const liveBtn = document.getElementById('mdscroll-live');
 
 const MERMAID_CDN = 'https://cdn.jsdelivr.net/npm/mermaid@11.14.0/dist/mermaid.esm.min.mjs';
 let mermaidPromise = null;
@@ -515,98 +325,50 @@ const setStatus = (state, text) => {
   statusEl.textContent = text;
 };
 
-const formatTime = (ms) => {
-  const d = new Date(ms);
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  return hh + ':' + mm;
+// Tail-follow: when the viewport is already near the bottom before an
+// update, snap back to the bottom after swapping content. This mirrors
+// \`tail -f\`: if the user is reading the latest content, stay with it;
+// if they've scrolled up to read earlier sections, leave them alone.
+// Threshold is intentionally generous (200px) because users often stop
+// reading a few lines above the real bottom.
+const BOTTOM_STICK_THRESHOLD = 200;
+const isNearBottom = () => {
+  const doc = document.documentElement;
+  return window.innerHeight + window.scrollY >= doc.scrollHeight - BOTTOM_STICK_THRESHOLD;
 };
-
-let viewingId = null;
-let currentId = null;
-let lastLiveHtml = null;
-let lastHistory = [];
+const scrollToBottom = () => {
+  window.scrollTo({ top: document.documentElement.scrollHeight });
+};
 
 const setContent = (html) => {
   if (!contentEl) return;
+  const shouldStick = isNearBottom();
   contentEl.innerHTML = html;
-  void renderMermaid(contentEl);
+  if (shouldStick) scrollToBottom();
+  void (async () => {
+    await renderMermaid(contentEl);
+    // Mermaid loads asynchronously from the CDN; once its SVGs land the
+    // document grows, so re-snap if we were sticking to the bottom.
+    if (shouldStick) scrollToBottom();
+  })();
 };
 
-const renderSidebar = () => {
-  if (!historyEl) return;
-  if (lastHistory.length === 0) {
-    historyEl.innerHTML = '<li class="mdscroll-history-empty">No pushes yet</li>';
-    return;
-  }
-  historyEl.innerHTML = '';
-  for (const snap of lastHistory) {
-    const li = document.createElement('li');
-    li.className = 'mdscroll-history-item';
-    li.dataset.id = snap.id;
-    const isCurrent =
-      (viewingId === null && snap.id === currentId) || snap.id === viewingId;
-    if (isCurrent) li.classList.add('is-current');
-    const time = document.createElement('span');
-    time.className = 'mdscroll-history-time';
-    time.textContent = formatTime(snap.createdAt);
-    const source = document.createElement('span');
-    source.className = 'mdscroll-history-source';
-    source.textContent = snap.source;
-    source.title = snap.source;
-    li.appendChild(time);
-    li.appendChild(source);
-    li.addEventListener('click', () => viewSnapshot(snap.id));
-    historyEl.appendChild(li);
-  }
+const setSource = (source) => {
+  if (!sourceEl || typeof source !== 'string') return;
+  sourceEl.textContent = source;
+  sourceEl.title = source;
 };
-
-const updateLiveButton = () => {
-  if (!liveBtn) return;
-  liveBtn.hidden = viewingId === null || viewingId === currentId;
-};
-
-const viewSnapshot = async (id) => {
-  try {
-    const r = await fetch('/api/snapshot/' + encodeURIComponent(id));
-    if (!r.ok) return;
-    const data = await r.json();
-    if (typeof data.html !== 'string') return;
-    viewingId = id;
-    setContent(data.html);
-    renderSidebar();
-    updateLiveButton();
-  } catch (err) {
-    console.warn('mdscroll: snapshot fetch failed', err);
-  }
-};
-
-const goLive = () => {
-  viewingId = null;
-  if (lastLiveHtml !== null) setContent(lastLiveHtml);
-  renderSidebar();
-  updateLiveButton();
-};
-
-if (liveBtn) liveBtn.addEventListener('click', goLive);
 
 if (contentEl) void renderMermaid(contentEl);
 
-const source = new EventSource('/events');
-source.addEventListener('open', () => setStatus('live', 'live'));
-source.addEventListener('error', () => setStatus('idle', 'reconnecting'));
-source.addEventListener('update', (event) => {
+const stream = new EventSource('/events');
+stream.addEventListener('open', () => setStatus('live', 'live'));
+stream.addEventListener('error', () => setStatus('idle', 'reconnecting'));
+stream.addEventListener('update', (event) => {
   try {
     const payload = JSON.parse(event.data);
-    if (typeof payload.html === 'string') lastLiveHtml = payload.html;
-    if (Array.isArray(payload.history)) lastHistory = payload.history;
-    currentId = payload.current && payload.current.id ? payload.current.id : null;
-
-    if (viewingId === null && lastLiveHtml !== null) {
-      setContent(lastLiveHtml);
-    }
-    renderSidebar();
-    updateLiveButton();
+    if (typeof payload.html === 'string') setContent(payload.html);
+    setSource(payload.source);
   } catch (err) {
     console.warn('mdscroll: bad update payload', err);
   }
