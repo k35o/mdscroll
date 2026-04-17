@@ -5,7 +5,7 @@ import { CLIENT_JS, INDEX_HTML, STYLES_CSS } from './client.js';
 import { render } from './render.js';
 import { Store } from './state.js';
 
-const EMPTY_PLACEHOLDER = [
+export const EMPTY_PLACEHOLDER = [
   '# mdscroll',
   '',
   'No content yet. Push some markdown to see it here:',
@@ -22,8 +22,7 @@ export type ServerHandle = {
   close: () => Promise<void>;
 };
 
-export const startServer = async (opts: { port: number; host: string }): Promise<ServerHandle> => {
-  const store = new Store();
+export const createApp = (store: Store): Hono => {
   const app = new Hono();
 
   app.get('/', async (c) => {
@@ -81,6 +80,13 @@ export const startServer = async (opts: { port: number; host: string }): Promise
       });
     });
   });
+
+  return app;
+};
+
+export const startServer = async (opts: { port: number; host: string }): Promise<ServerHandle> => {
+  const store = new Store();
+  const app = createApp(store);
 
   const server: ServerType = serve({
     fetch: app.fetch,

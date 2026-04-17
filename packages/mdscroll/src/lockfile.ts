@@ -3,8 +3,8 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-const LOCK_DIR = join(homedir(), '.mdscroll');
-const LOCK_FILE = join(LOCK_DIR, 'server.lock');
+const DEFAULT_LOCK_DIR = join(homedir(), '.mdscroll');
+const LOCK_FILE_NAME = 'server.lock';
 
 export type Lock = {
   pid: number;
@@ -12,6 +12,8 @@ export type Lock = {
   host: string;
   startedAt: number;
 };
+
+const lockPath = (dir: string): string => join(dir, LOCK_FILE_NAME);
 
 const isProcessAlive = (pid: number): boolean => {
   try {
@@ -22,13 +24,14 @@ const isProcessAlive = (pid: number): boolean => {
   }
 };
 
-export const readLock = async (): Promise<Lock | null> => {
-  if (!existsSync(LOCK_FILE)) return null;
+export const readLock = async (dir: string = DEFAULT_LOCK_DIR): Promise<Lock | null> => {
+  const file = lockPath(dir);
+  if (!existsSync(file)) return null;
   try {
-    const raw = await readFile(LOCK_FILE, 'utf-8');
+    const raw = await readFile(file, 'utf-8');
     const parsed = JSON.parse(raw) as Lock;
     if (!isProcessAlive(parsed.pid)) {
-      await removeLock();
+      await removeLock(dir);
       return null;
     }
     return parsed;
@@ -37,14 +40,14 @@ export const readLock = async (): Promise<Lock | null> => {
   }
 };
 
-export const writeLock = async (lock: Lock): Promise<void> => {
-  await mkdir(LOCK_DIR, { recursive: true });
-  await writeFile(LOCK_FILE, JSON.stringify(lock, null, 2));
+export const writeLock = async (lock: Lock, dir: string = DEFAULT_LOCK_DIR): Promise<void> => {
+  await mkdir(dir, { recursive: true });
+  await writeFile(lockPath(dir), JSON.stringify(lock, null, 2));
 };
 
-export const removeLock = async (): Promise<void> => {
+export const removeLock = async (dir: string = DEFAULT_LOCK_DIR): Promise<void> => {
   try {
-    await unlink(LOCK_FILE);
+    await unlink(lockPath(dir));
   } catch {
     // already gone
   }
