@@ -104,12 +104,14 @@ export const runMdscroll = async (opts: RunOptions): Promise<void> => {
     return;
   }
 
-  await warmup();
-
-  const port = await resolvePort(opts.port);
-
+  // Keep warmup() and resolvePort() inside the cleanup boundary: if
+  // either rejects (e.g. shiki module load fails, port probe hits
+  // EPERM), we have to close the already-open fs.watch handle or the
+  // process will hang forever with the event loop alive.
   let handle: Awaited<ReturnType<typeof startServer>>;
   try {
+    await warmup();
+    const port = await resolvePort(opts.port);
     handle = await startServer({ port, host: opts.host, store });
   } catch (err) {
     ingest.stop();

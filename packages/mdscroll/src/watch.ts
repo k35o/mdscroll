@@ -43,9 +43,23 @@ export const watchFile = (file: string, onChange: () => void | Promise<void>): W
 
   const watcher = watch(dir, (_eventType, filename) => {
     if (closed) return;
-    if (filename !== base) return;
+    // `filename` can be null on platforms / filesystems where the
+    // kernel doesn't surface it (some older Linux, certain network
+    // mounts). We can't tell whether the event was for our file, so we
+    // fall through and let the onChange re-read settle it — a wasted
+    // read is cheaper than silently dropping every update.
+    if (filename !== null && filename !== base) return;
     if (timer) clearTimeout(timer);
     timer = setTimeout(fire, DEBOUNCE_MS);
+  });
+
+  // FSWatcher surfaces some failures asynchronously via 'error' rather
+  // than throwing from watch(). Attaching a listener keeps those from
+  // crashing the process: log the error and let the existing content
+  // keep serving. The watcher is effectively dead after this, but the
+  // HTTP server and last-known content are still useful to the user.
+  watcher.on('error', (err) => {
+    process.stderr.write(`mdscroll: watcher error: ${String(err)}\n`);
   });
 
   return {
