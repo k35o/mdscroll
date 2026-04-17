@@ -2,11 +2,12 @@ import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { DEFAULT_INSTANCE_NAME } from '../constants.js';
+
+export { DEFAULT_INSTANCE_NAME };
 
 const DEFAULT_LOCK_DIR = join(homedir(), '.mdscroll');
 const LOCK_SUFFIX = '.lock';
-
-export const DEFAULT_INSTANCE_NAME = 'default';
 
 export type Lock = {
   name: string;

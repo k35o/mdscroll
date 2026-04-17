@@ -1,6 +1,6 @@
 import getPort from 'get-port';
 
-export const DEFAULT_PORT = 4977;
+export { DEFAULT_PORT } from './constants.js';
 
 /**
  * Resolve a port to bind on.

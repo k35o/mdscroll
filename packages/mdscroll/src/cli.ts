@@ -4,6 +4,7 @@ import { runList } from './commands/list.js';
 import { runPush } from './commands/push.js';
 import { runStart } from './commands/start.js';
 import { runStop } from './commands/stop.js';
+import { DEFAULT_HOST, DEFAULT_INSTANCE_NAME, DEFAULT_PORT } from './constants.js';
 
 type StartCliOptions = {
   name: string;
@@ -34,9 +35,13 @@ program
     'Start the local preview server and print its URL. With a file argument, behaves exactly like `mdscroll push <file>`.',
   )
   .argument('[file]', 'Markdown file to push (alias for `mdscroll push <file>`)')
-  .option('-n, --name <name>', 'Instance name (multiple instances are isolated)', 'default')
-  .option('-p, --port <port>', 'Port to listen on', '4977')
-  .option('-h, --host <host>', 'Host to bind to', '127.0.0.1')
+  .option(
+    '-n, --name <name>',
+    'Instance name (multiple instances are isolated)',
+    DEFAULT_INSTANCE_NAME,
+  )
+  .option('-p, --port <port>', 'Port to listen on', String(DEFAULT_PORT))
+  .option('-h, --host <host>', 'Host to bind to', DEFAULT_HOST)
   .action(async (file: string | undefined, opts: StartCliOptions) => {
     if (file) {
       await runPush({
@@ -57,9 +62,9 @@ program
 program
   .command('push [file]')
   .description('Push markdown content to the running server (file path or stdin)')
-  .option('-n, --name <name>', 'Instance name', 'default')
-  .option('-p, --port <port>', 'Port', '4977')
-  .option('-h, --host <host>', 'Host', '127.0.0.1')
+  .option('-n, --name <name>', 'Instance name', DEFAULT_INSTANCE_NAME)
+  .option('-p, --port <port>', 'Port', String(DEFAULT_PORT))
+  .option('-h, --host <host>', 'Host', DEFAULT_HOST)
   .action(async (file: string | undefined, opts: PushCliOptions) => {
     await runPush({
       name: opts.name,
@@ -72,7 +77,7 @@ program
 program
   .command('stop')
   .description('Stop a running server (sends SIGTERM via the lockfile pid)')
-  .option('-n, --name <name>', 'Instance name', 'default')
+  .option('-n, --name <name>', 'Instance name', DEFAULT_INSTANCE_NAME)
   .action(async (opts: StopCliOptions) => {
     await runStop({ name: opts.name });
   });
