@@ -1,22 +1,23 @@
 # mdscroll
 
-Push markdown to a local browser preview — instantly.
+Preview markdown in a local browser — instantly, with zero disk state.
 
 Monorepo for the `mdscroll` CLI. See [`packages/mdscroll`](./packages/mdscroll) for the user-facing README and npm details.
 
 ```bash
-mdscroll                         # start server, print URL (no browser)
-echo "# Hello" | mdscroll push   # push content; open browser updates instantly
-mdscroll push plan.md            # or push a file
+mdscroll plan.md           # watch file, auto-reload browser on every change
+cat plan.md | mdscroll     # one-shot: serve stdin once, Ctrl+C to stop
 ```
+
+Both forms run in the foreground and exit cleanly on Ctrl+C. Nothing is written outside the running process — no lockfile, no log file, no `~/.mdscroll/`.
 
 ## Stack
 
 - **Workspace**: pnpm 10 with catalog. `minimumReleaseAge: 10080` (7 days) gates new deps.
-- **Toolchain**: [vite-plus](https://viteplus.dev) (`vp`) — build (tsdown), lint/format (oxlint + oxfmt), task running
+- **Toolchain**: [vite-plus](https://viteplus.dev) (`vp`) — build (tsdown), lint/format (oxlint + oxfmt), task running.
 - **Runtime** (contributors): Node 24.14.1 via mise. The **published package** targets `node >= 20`.
-- **Core**: [Hono](https://hono.dev), [markdown-it](https://github.com/markdown-it/markdown-it), [Shiki](https://shiki.style), [Mermaid](https://mermaid.js.org) (loaded client-side from a pinned jsDelivr URL and gated by a strict Content-Security-Policy)
-- **Tests**: [Vitest](https://vitest.dev) covering renderer, state, lockfile, server routes, commands, and integration flow
+- **Core**: [Hono](https://hono.dev), [markdown-it](https://github.com/markdown-it/markdown-it), [Shiki](https://shiki.style), [Mermaid](https://mermaid.js.org) (loaded client-side from a pinned jsDelivr URL, gated by a strict Content-Security-Policy).
+- **Tests**: [Vitest](https://vitest.dev) covering renderer, state, source label extraction, file watcher, and server routes.
 
 ## Development
 
@@ -45,12 +46,14 @@ mdscroll/
 ├── skills/mdscroll/SKILL.md   # agentskills.io-compliant skill (gh skill install k35o/mdscroll)
 ├── packages/mdscroll/         # the published package (bin: mdscroll)
 │   └── src/
-│       ├── cli.ts             # commander entry
-│       ├── constants.ts       # DEFAULT_PORT / HOST / INSTANCE_NAME
+│       ├── cli.ts             # commander entry (single command)
+│       ├── run.ts             # ingest (file-watch or stdin) + bind server
+│       ├── watch.ts           # fs.watch-based file watcher with debounce
+│       ├── source.ts          # header label resolver (filename or H1 or "(untitled)")
 │       ├── port.ts            # resolvePort (get-port fallback)
-│       ├── commands/          # start / push / stop / list
-│       ├── server/            # app.ts (Hono), render.ts, client.ts
-│       └── store/             # state.ts (Snapshot + Store), lockfile.ts
+│       ├── constants.ts       # DEFAULT_PORT / DEFAULT_HOST
+│       ├── server/            # app.tsx (Hono), render.ts, client.tsx
+│       └── store/             # state.ts (Snapshot + Store)
 ├── pnpm-workspace.yaml        # catalog + release-age gate
 ├── vite.config.ts             # root vp config (fmt / lint / staged)
 ├── mise.toml                  # Node 24.14.1, pnpm 10.33.0
@@ -67,4 +70,4 @@ See [`CLAUDE.md`](./CLAUDE.md#release) for the first-publish bootstrap and trust
 
 ## License
 
-MIT © k8o
+MIT (c) k8o
