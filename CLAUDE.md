@@ -31,24 +31,44 @@ mdscroll/                          # repo root
 ├── skills/mdscroll/SKILL.md       # agent skill (agentskills.io spec); installed via `gh skill install k35o/mdscroll`
 └── packages/mdscroll/src/
     ├── cli.ts                     # commander entry; wires up every command (--name on start/push/stop)
+    ├── constants.ts               # DEFAULT_HOST / DEFAULT_PORT / DEFAULT_INSTANCE_NAME
     ├── port.ts                    # resolvePort (get-port) — prefer requested, fall back to free
     ├── types.d.ts                 # ambient types (untyped markdown-it-task-lists)
-    ├── commands/                  # runX functions — one per CLI command
-    │   ├── start.ts               # warm Shiki, bind, write lockfile (foreground server)
-    │   ├── push.ts                # POST /push (with X-Mdscroll-Source); auto-spawn + poll lockfile
-    │   ├── stop.ts                # SIGTERM the lockfile pid (per --name)
-    │   └── list.ts                # listLocks() → tabular print of NAME / PID / URL / STARTED
+    ├── commands/                  # runX functions — one per CLI command, plus small single-purpose helpers
+    │   ├── start.ts               # warmup + claimLock (writeLockExclusive) + bind (foreground)
+    │   ├── push.ts                # orchestration: read input → POST → spawn+poll
+    │   ├── stop.ts                # SIGTERM the lockfile pid after /identity check
+    │   ├── list.ts                # listLocks() → tabular print of NAME / PID / URL / STARTED
+    │   ├── http.ts                # postPush + PostResult (transport only, no flow)
+    │   └── spawn.ts               # spawnDetachedServer + tailLog (detached spawn + per-instance log)
     ├── server/                    # HTTP + rendering + browser assets
-    │   ├── app.ts                 # createApp(store) (testable) + startServer(opts). Routes:
-    │   │                          #   GET /, /style.css, /main.js
-    │   │                          #   POST /push (reads X-Mdscroll-Source header for source label)
+    │   ├── app.ts                 # createApp(store, {identity}) + startServer(opts). Routes:
+    │   │                          #   GET /, /style.css, /main.js, /identity
+    │   │                          #   POST /push (X-Mdscroll-Source required, 5 MiB cap)
     │   │                          #   GET /api/snapshot/:id (renders past snapshot HTML)
     │   │                          #   GET /events (SSE: { html, current, history })
+    │   │                          # GET / sets a strict CSP header.
     │   ├── render.ts              # markdown-it + shiki + mermaid fence + GFM plugins
     │   └── client.ts              # inline HTML / CSS / JS. Drawer uses native popover + commandfor — no JS for open/close/ESC/light-dismiss.
     └── store/                     # shared in-process state and on-disk persistence
         ├── state.ts               # Snapshot { id, markdown, source, createdAt }; Store keeps last MAX_HISTORY=20, current()/history()/byId()/push().
-        └── lockfile.ts            # ~/.mdscroll/<name>.lock with dead-PID cleanup; readLock/writeLock/removeLock/listLocks.
+        ├── lockfile.ts            # ~/.mdscroll/<name>.lock with validateLock + identity + writeLockExclusive; readLock/writeLock/removeLock/listLocks.
+        └── instance-name.ts       # isValidInstanceName / assertValidInstanceName — defends lockfile + log paths from traversal.
+```
+
+Dependency layers (no cycles):
+
+```
+cli
+ └─ commands/*   (runStart / runPush / runStop / runList)
+      ├─ commands/http      (postPush: transport only)
+      ├─ commands/spawn     (detached spawn + log tailing)
+      ├─ server/app         (startServer for foreground `start`)
+      ├─ server/render      (warmup for fast first render)
+      └─ store/lockfile
+           └─ store/instance-name
+server/app → server/render, server/client, store/state
+store/lockfile → constants, store/instance-name
 ```
 
 Tests live alongside their source (`*.test.ts`).
