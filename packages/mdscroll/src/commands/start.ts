@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import { resolvePort } from '../port.js';
 import { startServer } from '../server/app.js';
 import { warmup } from '../server/render.js';
@@ -8,29 +7,15 @@ export type StartOptions = {
   name?: string | undefined;
   port: number;
   host: string;
-  file?: string | undefined;
-};
-
-const pushToRunning = async (host: string, port: number, content: string): Promise<void> => {
-  await fetch(`http://${host}:${port}/push`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    body: content,
-  });
 };
 
 export const runStart = async (opts: StartOptions): Promise<void> => {
   const name = opts.name ?? DEFAULT_INSTANCE_NAME;
-  const initial = opts.file ? await readFile(opts.file, 'utf-8') : null;
 
   const existing = await readLock(name);
   if (existing) {
     const url = `http://${existing.host}:${existing.port}`;
     process.stdout.write(`mdscroll[${name}] already running at ${url}\n`);
-    if (initial !== null) {
-      await pushToRunning(existing.host, existing.port, initial);
-      process.stdout.write(`mdscroll[${name}]: pushed ${opts.file}\n`);
-    }
     return;
   }
 
@@ -46,11 +31,6 @@ export const runStart = async (opts: StartOptions): Promise<void> => {
     host: opts.host,
     startedAt: Date.now(),
   });
-
-  if (initial !== null) {
-    const source = opts.file ?? 'unknown';
-    handle.store.push(initial, source);
-  }
 
   process.stdout.write(`mdscroll[${name}] running at ${handle.url}\n`);
 

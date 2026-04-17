@@ -46,13 +46,14 @@ pnpm add -g mdscroll
 ### Start the server
 
 ```bash
-mdscroll                    # starts on 127.0.0.1:4977, prints URL
-mdscroll README.md          # seeds the server with README.md
+mdscroll                    # starts on 127.0.0.1:4977, prints URL, runs in foreground
 mdscroll --port 5000        # custom port
 mdscroll --host 0.0.0.0     # bind to all interfaces
 ```
 
-If a server is already running, `mdscroll` is a no-op that re-prints the URL; `mdscroll <file>` pushes that file to the running server.
+If a server is already running, `mdscroll` is a no-op that re-prints the URL.
+
+`mdscroll <file>` is a shortcut for `mdscroll push <file>` — auto-spawns a detached server when needed and exits, instead of blocking.
 
 ### Push content
 

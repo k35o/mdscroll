@@ -8,7 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Surface area:
 
-- `mdscroll [file]` — start server (idempotent, lockfile-guarded). Optional file is shown immediately. **Does not open a browser** — only prints the URL.
+- `mdscroll` — start the server in the foreground (idempotent, lockfile-guarded). **Does not open a browser** — only prints the URL.
+- `mdscroll <file>` — alias for `mdscroll push <file>`; the cli routes the optional [file] arg to `runPush` so the two forms behave identically (auto-spawn detached + exit).
 - `mdscroll push [file]` — push a file or stdin to the running server. Auto-spawns if needed.
 - `mdscroll stop` — SIGTERM the lockfile pid.
 - `mdscroll list` — table of every alive instance.

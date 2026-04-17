@@ -37,16 +37,24 @@ program
 program
   .command('start', { isDefault: true })
   .description(
-    'Start the local preview server and print its URL. Optionally seed it with a markdown file.',
+    'Start the local preview server and print its URL. With a file argument, behaves exactly like `mdscroll push <file>`.',
   )
-  .argument('[file]', 'Markdown file to display immediately on startup')
+  .argument('[file]', 'Markdown file to push (alias for `mdscroll push <file>`)')
   .option('-n, --name <name>', 'Instance name (multiple instances are isolated)', 'default')
   .option('-p, --port <port>', 'Port to listen on', '4977')
   .option('-h, --host <host>', 'Host to bind to', '127.0.0.1')
   .action(async (file: string | undefined, opts: StartCliOptions) => {
+    if (file) {
+      await runPush({
+        name: opts.name,
+        file,
+        port: Number(opts.port),
+        host: opts.host,
+      });
+      return;
+    }
     await runStart({
       name: opts.name,
-      file,
       port: Number(opts.port),
       host: opts.host,
     });
