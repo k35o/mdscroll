@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { runInstallSkill } from './commands/install-skill.js';
 import { runPush } from './commands/push.js';
 import { runStart } from './commands/start.js';
+import { runStop } from './commands/stop.js';
 
 type StartCliOptions = {
   port: string;
@@ -29,12 +30,16 @@ program
 
 program
   .command('start', { isDefault: true })
-  .description('Start the local preview server and open the browser')
+  .description(
+    'Start the local preview server and open the browser. Optionally display a markdown file on startup.',
+  )
+  .argument('[file]', 'Markdown file to display immediately on startup')
   .option('-p, --port <port>', 'Port to listen on', '4977')
   .option('-h, --host <host>', 'Host to bind to', '127.0.0.1')
   .option('--no-open', 'Do not open the browser automatically')
-  .action(async (opts: StartCliOptions) => {
+  .action(async (file: string | undefined, opts: StartCliOptions) => {
     await runStart({
+      file,
       port: Number(opts.port),
       host: opts.host,
       open: opts.open,
@@ -52,6 +57,13 @@ program
       port: Number(opts.port),
       host: opts.host,
     });
+  });
+
+program
+  .command('stop')
+  .description('Stop the running server (sends SIGTERM via the lockfile pid)')
+  .action(async () => {
+    await runStop();
   });
 
 program

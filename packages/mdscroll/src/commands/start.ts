@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import open from 'open';
 import { resolvePort } from '../port.js';
 import { startServer } from '../server/app.js';
@@ -8,13 +9,28 @@ export type StartOptions = {
   port: number;
   host: string;
   open: boolean;
+  file?: string | undefined;
+};
+
+const pushToRunning = async (host: string, port: number, content: string): Promise<void> => {
+  await fetch(`http://${host}:${port}/push`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    body: content,
+  });
 };
 
 export const runStart = async (opts: StartOptions): Promise<void> => {
+  const initial = opts.file ? await readFile(opts.file, 'utf-8') : null;
+
   const existing = await readLock();
   if (existing) {
     const url = `http://${existing.host}:${existing.port}`;
     process.stdout.write(`mdscroll already running at ${url}\n`);
+    if (initial !== null) {
+      await pushToRunning(existing.host, existing.port, initial);
+      process.stdout.write(`mdscroll: pushed ${opts.file}\n`);
+    }
     if (opts.open) await open(url);
     return;
   }
@@ -30,6 +46,8 @@ export const runStart = async (opts: StartOptions): Promise<void> => {
     host: opts.host,
     startedAt: Date.now(),
   });
+
+  if (initial !== null) handle.store.set(initial);
 
   process.stdout.write(`mdscroll running at ${handle.url}\n`);
 

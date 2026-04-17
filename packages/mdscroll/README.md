@@ -5,9 +5,11 @@ Push markdown to a local browser preview — instantly.
 Pipe AI-generated plans, drafts, or reports into a beautifully rendered live view. Two commands, zero config.
 
 ```bash
-mdscroll                         # start server + open browser
+mdscroll                         # start server + open browser (empty preview)
+mdscroll README.md               # start + show this file immediately
 echo "# Hello" | mdscroll push   # browser updates instantly
 mdscroll push plan.md            # or push a file
+mdscroll stop                    # stop the running server
 ```
 
 ## Why
@@ -40,11 +42,14 @@ pnpm add -g mdscroll
 ### Start the server
 
 ```bash
-mdscroll                    # starts on 127.0.0.1:4977, opens browser
+mdscroll                    # starts on 127.0.0.1:4977, opens browser (empty preview)
+mdscroll README.md          # also shows README.md immediately
 mdscroll --port 5000        # custom port
 mdscroll --host 0.0.0.0     # bind to all interfaces
 mdscroll --no-open          # don't auto-open the browser
 ```
+
+If a server is already running, `mdscroll` is a no-op (just opens the browser); `mdscroll <file>` pushes that file to the running server.
 
 ### Push content
 
@@ -57,13 +62,19 @@ cat a.md b.md | mdscroll push  # concatenated
 
 Each push replaces the current content. The browser re-renders via SSE.
 
+### Stop the server
+
+```bash
+mdscroll stop               # SIGTERM the lockfile pid; lockfile is cleaned up
+```
+
 ### Flags
 
-| Flag             | Default     | Description                      |
-| ---------------- | ----------- | -------------------------------- |
-| `-p, --port <n>` | `4977`      | Port to listen on                |
-| `-h, --host <h>` | `127.0.0.1` | Host to bind to                  |
-| `--no-open`      | —           | Skip opening the browser (start) |
+| Flag             | Default     | Description                                                              |
+| ---------------- | ----------- | ------------------------------------------------------------------------ |
+| `-p, --port <n>` | `4977`      | Port to listen on. If unavailable, falls back to a free port. `0` = auto |
+| `-h, --host <h>` | `127.0.0.1` | Host to bind to                                                          |
+| `--no-open`      | —           | Skip opening the browser (start)                                         |
 
 ## How it works
 
