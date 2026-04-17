@@ -27,3 +27,18 @@ export const stdinSourceLabel = (markdown: string): string => {
   const title = match?.[1]?.trim();
   return title && title.length > 0 ? title : UNTITLED;
 };
+
+/**
+ * Clip a long source label from the left so the end (typically the
+ * filename) stays visible — `…T/mdscroll-live/plan.md`.
+ *
+ * We do this at render time rather than relying on CSS `text-overflow:
+ * ellipsis`, which always anchors the ellipsis on the right. The
+ * RTL + plaintext CSS hack is fragile across browsers; truncating the
+ * string up-front is unambiguous.
+ */
+const MAX_DISPLAY_LEN = 60;
+export const displaySourceLabel = (source: string): string => {
+  if (source.length <= MAX_DISPLAY_LEN) return source;
+  return `…${source.slice(-(MAX_DISPLAY_LEN - 1))}`;
+};

@@ -120,7 +120,10 @@ body {
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  /* Truncation happens in source.ts (displaySourceLabel) so the end of
+     the path — typically the filename — is always visible. No
+     text-overflow: ellipsis here: the server already inserts a leading
+     horizontal ellipsis character when needed. */
 }
 .mdscroll-status {
   flex-shrink: 0;

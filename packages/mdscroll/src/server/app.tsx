@@ -2,6 +2,7 @@ import { serve, type ServerType } from '@hono/node-server';
 import { Hono } from 'hono';
 import { html } from 'hono/html';
 import { streamSSE } from 'hono/streaming';
+import { displaySourceLabel } from '../source.js';
 import { type Snapshot, Store } from '../store/state.js';
 import { CLIENT_JS, Document, STYLES_CSS } from './client.js';
 import { render } from './render.js';
@@ -17,7 +18,8 @@ export type ServerHandle = {
 const renderCurrent = (current: Snapshot | null): Promise<string> =>
   render(current?.markdown ?? EMPTY_PLACEHOLDER);
 
-const sourceOf = (current: Snapshot | null): string => current?.source ?? EMPTY_SOURCE;
+const sourceOf = (current: Snapshot | null): string =>
+  displaySourceLabel(current?.source ?? EMPTY_SOURCE);
 
 export const createApp = (store: Store): Hono => {
   const app = new Hono();
