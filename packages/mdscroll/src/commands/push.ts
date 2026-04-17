@@ -27,7 +27,8 @@ const readStdin = async (): Promise<string> => {
   return Buffer.concat(chunks).toString('utf-8');
 };
 
-const pushUrl = (host: string, port: number): string => `http://${host}:${port}/push`;
+const browserUrl = (host: string, port: number): string => `http://${host}:${port}/`;
+const pushEndpoint = (host: string, port: number): string => `http://${host}:${port}/push`;
 
 const tryPost = async (url: string, body: string, source: string): Promise<boolean> => {
   try {
@@ -75,9 +76,10 @@ export const runPush = async (opts: PushOptions): Promise<void> => {
 
   const existing = await readLock(name);
   if (existing) {
-    const url = pushUrl(existing.host, existing.port);
-    if (await tryPost(url, content, source)) {
-      process.stdout.write(`mdscroll[${name}]: pushed to ${url}\n`);
+    if (await tryPost(pushEndpoint(existing.host, existing.port), content, source)) {
+      process.stdout.write(
+        `mdscroll[${name}]: pushed to ${browserUrl(existing.host, existing.port)}\n`,
+      );
       return;
     }
     // Stale lockfile — server is gone. Clean up and fall through to spawn.
@@ -90,9 +92,10 @@ export const runPush = async (opts: PushOptions): Promise<void> => {
     await sleep(POLL_INTERVAL_MS);
     const lock = await readLock(name);
     if (!lock) continue;
-    const url = pushUrl(lock.host, lock.port);
-    if (await tryPost(url, content, source)) {
-      process.stdout.write(`mdscroll[${name}]: started server and pushed to ${url}\n`);
+    if (await tryPost(pushEndpoint(lock.host, lock.port), content, source)) {
+      process.stdout.write(
+        `mdscroll[${name}]: started server and pushed to ${browserUrl(lock.host, lock.port)}\n`,
+      );
       return;
     }
   }

@@ -34,17 +34,17 @@ MDSCROLL_EOF
 mdscroll docs/plan.md
 ```
 
-Both paths auto-spawn the server if it isn't already running, then exit. Stdout includes the URL:
+Both paths auto-spawn the server if it isn't already running, then exit. Stdout includes the **browser URL** you can hand to the user or open:
 
 ```
-mdscroll[default]: pushed to http://127.0.0.1:4977/push
+mdscroll[default]: pushed to http://127.0.0.1:4977/
 ```
 
 ## Steps
 
 1. Assemble the Markdown you want to display
 2. Push it using one of the commands above
-3. If the exit code is 0 and you see `mdscroll[...]: pushed to <url>`, it worked
+3. If the exit code is 0 and you see `mdscroll[...]: pushed to <url>` (the URL ends with `/`, not `/push`), it worked
 4. mdscroll never opens a browser itself. Open the URL in whatever browser surface fits the host environment (e.g. `cmux browser open-split <url>` inside cmux) and point the user at it
 
 ## Notes for the History drawer
