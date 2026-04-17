@@ -16,9 +16,12 @@ catalog:
   shiki: 4.0.2
   skills-ref: 0.1.5
   typescript: 6.0.2
-  vite-plus: 0.1.16
+  vite-plus: 0.1.17
   vitest: 4.1.4
 
 blockExoticSubdeps: true
 minimumReleaseAge: 10080
 verifyDepsBeforeRun: install
+minimumReleaseAgeExclude:
+  # Renovate security update: vite-plus@0.1.17
+  - vite-plus@0.1.17
