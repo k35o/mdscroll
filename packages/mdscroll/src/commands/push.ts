@@ -18,6 +18,11 @@ export type PushOptions = {
   file?: string | undefined;
   port: number;
   host: string;
+  /**
+   * Override the lockfile directory. Intended for tests — production
+   * always uses the default (~/.mdscroll).
+   */
+  dir?: string | undefined;
 };
 
 const readStdin = async (): Promise<string> => {
@@ -114,7 +119,7 @@ export const runPush = async (opts: PushOptions): Promise<void> => {
 
   const source = sourceFor(opts.file);
 
-  const existing = await readLock(name);
+  const existing = await readLock(name, opts.dir);
   if (existing) {
     const result = await tryPost(pushEndpoint(existing.host, existing.port), content, source);
     if (result.kind === 'ok') {
@@ -135,14 +140,14 @@ export const runPush = async (opts: PushOptions): Promise<void> => {
       return;
     }
     // unreachable — server is gone. Clean up and fall through to spawn.
-    await removeLock(name);
+    await removeLock(name, opts.dir);
   }
 
   const logPath = await spawnServer(name, opts.port, opts.host);
 
   for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt += 1) {
     await sleep(POLL_INTERVAL_MS);
-    const lock = await readLock(name);
+    const lock = await readLock(name, opts.dir);
     if (!lock) continue;
     const result = await tryPost(pushEndpoint(lock.host, lock.port), content, source);
     if (result.kind === 'ok') {

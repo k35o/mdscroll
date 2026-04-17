@@ -1,10 +1,10 @@
 import { type ChildProcess, spawn } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readLock, writeLock } from '../store/lockfile.js';
-import { sourceFor, tryPost } from './push.js';
+import { runPush, sourceFor, tryPost } from './push.js';
 
 describe('sourceFor', () => {
   let originalCwd: string;
@@ -173,7 +173,7 @@ describe('runPush lock behavior on rejection', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it('leaves the lockfile in place when a live server responds with 413', async () => {
+  it('runPush leaves the lockfile in place when a live server responds with 413', async () => {
     const fake = await spawnStubServer(413);
     fakes.push(fake);
 
@@ -189,12 +189,31 @@ describe('runPush lock behavior on rejection', () => {
       dir,
     );
 
-    const result = await tryPost(`http://127.0.0.1:${fake.port}/push`, 'hi', 'test');
-    expect(result.kind).toBe('rejected');
+    // Give runPush real content via a tempfile so stdin is irrelevant.
+    const contentPath = join(dir, 'content.md');
+    await writeFile(contentPath, '# rejected push');
 
-    // The key invariant: a rejected (live) response should not cause
-    // runPush to wipe the lock. runPush reads this result and bails
-    // with exit code 1, leaving the lock intact.
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const previousExit = process.exitCode;
+    process.exitCode = 0;
+
+    await runPush({
+      name: 'stubby',
+      file: contentPath,
+      port: fake.port,
+      host: '127.0.0.1',
+      dir,
+    });
+
+    // runPush must have surfaced the rejection and set exit code 1.
+    expect(process.exitCode).toBe(1);
+    const stderrOutput = stderr.mock.calls.map((c) => String(c[0])).join('');
+    expect(stderrOutput).toContain('rejected push with 413');
+
+    process.exitCode = previousExit;
+    stderr.mockRestore();
+
+    // Core invariant: a rejected (live) response must NOT wipe the lock.
     expect(await readLock('stubby', dir)).not.toBeNull();
   });
 });
