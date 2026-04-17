@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { Command, Option } from 'commander';
+import { Command, InvalidArgumentError, Option } from 'commander';
 import { runList } from './commands/list.js';
 import { runPush } from './commands/push.js';
 import { runStart } from './commands/start.js';
 import { runStop } from './commands/stop.js';
 import { DEFAULT_HOST, DEFAULT_INSTANCE_NAME, DEFAULT_PORT } from './constants.js';
+import { assertValidInstanceName } from './instance-name.js';
 
 const pkg = JSON.parse(
   readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf-8'),
@@ -23,7 +24,15 @@ type NameOption = {
 };
 
 const nameOption = () =>
-  new Option('-n, --name <name>', 'Instance name').default(DEFAULT_INSTANCE_NAME);
+  new Option('-n, --name <name>', 'Instance name')
+    .default(DEFAULT_INSTANCE_NAME)
+    .argParser((value) => {
+      try {
+        return assertValidInstanceName(value);
+      } catch (err) {
+        throw new InvalidArgumentError(err instanceof Error ? err.message : String(err));
+      }
+    });
 const portOption = () =>
   new Option('-p, --port <port>', 'Port to listen on').default(String(DEFAULT_PORT));
 const hostOption = () => new Option('-h, --host <host>', 'Host to bind to').default(DEFAULT_HOST);

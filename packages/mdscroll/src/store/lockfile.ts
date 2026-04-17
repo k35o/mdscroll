@@ -4,6 +4,7 @@ import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { DEFAULT_INSTANCE_NAME } from '../constants.js';
+import { isValidInstanceName } from '../instance-name.js';
 
 export { DEFAULT_INSTANCE_NAME };
 
@@ -35,7 +36,7 @@ const isString = (value: unknown): value is string => typeof value === 'string' 
 const validateLock = (value: unknown): Lock | null => {
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Record<string, unknown>;
-  if (!isString(candidate.name)) return null;
+  if (!isValidInstanceName(candidate.name)) return null;
   if (!isFiniteInteger(candidate.pid) || candidate.pid <= 0) return null;
   if (!isFiniteInteger(candidate.port) || candidate.port <= 0 || candidate.port > 65535) {
     return null;
@@ -71,6 +72,7 @@ export const readLock = async (
   name: string = DEFAULT_INSTANCE_NAME,
   dir: string = DEFAULT_LOCK_DIR,
 ): Promise<Lock | null> => {
+  if (!isValidInstanceName(name)) return null;
   const file = lockPath(dir, name);
   if (!existsSync(file)) return null;
   let parsed: unknown;
@@ -130,6 +132,7 @@ export const removeLock = async (
   name: string = DEFAULT_INSTANCE_NAME,
   dir: string = DEFAULT_LOCK_DIR,
 ): Promise<void> => {
+  if (!isValidInstanceName(name)) return;
   try {
     await unlink(lockPath(dir, name));
   } catch {
