@@ -17,16 +17,18 @@ Monorepo (pnpm workspaces). One package today: `packages/mdscroll`.
 
 Source layout (`packages/mdscroll/src/`):
 
-| File          | Responsibility                                                                                                                                                          |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cli.ts`      | commander entry. Defines `start` (default) and `push`.                                                                                                                  |
-| `start.ts`    | `runStart`: warm up Shiki, build app, bind port, write lockfile, open browser, handle SIGINT/SIGTERM.                                                                   |
-| `push.ts`     | `runPush`: read file or stdin, POST to `/push`. If no server, spawn detached and retry for ~4.5s.                                                                       |
-| `server.ts`   | `createApp(store)` (testable Hono app) + `startServer(opts)` (binds via `@hono/node-server`). Routes: `/`, `/style.css`, `/main.js`, `POST /push`, `GET /events` (SSE). |
-| `render.ts`   | markdown-it + shiki. Async memoized highlighter. Custom fence rule emits `<pre class="mermaid">` for `mermaid` blocks. Plugins: task lists, GFM alerts.                 |
-| `state.ts`    | In-memory `Store` with versioned snapshots + listener subscriptions.                                                                                                    |
-| `lockfile.ts` | `~/.mdscroll/server.lock` with dead-PID cleanup. `dir` is an optional parameter to keep tests off the real home directory.                                              |
-| `client.ts`   | Inline HTML / CSS / JS the server ships to the browser. Mermaid loads client-side from CDN.                                                                             |
+| File               | Responsibility                                                                                                                                                          |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cli.ts`           | commander entry. Defines `start` (default), `push`, and `install-skill`.                                                                                                |
+| `start.ts`         | `runStart`: warm up Shiki, build app, bind port, write lockfile, open browser, handle SIGINT/SIGTERM.                                                                   |
+| `push.ts`          | `runPush`: read file or stdin, POST to `/push`. If no server, spawn detached and retry for ~4.5s.                                                                       |
+| `server.ts`        | `createApp(store)` (testable Hono app) + `startServer(opts)` (binds via `@hono/node-server`). Routes: `/`, `/style.css`, `/main.js`, `POST /push`, `GET /events` (SSE). |
+| `render.ts`        | markdown-it + shiki. Async memoized highlighter. Custom fence rule emits `<pre class="mermaid">` for `mermaid` blocks. Plugins: task lists, GFM alerts.                 |
+| `state.ts`         | In-memory `Store` with versioned snapshots + listener subscriptions.                                                                                                    |
+| `lockfile.ts`      | `~/.mdscroll/server.lock` with dead-PID cleanup. `dir` is an optional parameter to keep tests off the real home directory.                                              |
+| `client.ts`        | Inline HTML / CSS / JS the server ships to the browser. Mermaid loads client-side from CDN.                                                                             |
+| `skill.ts`         | The SKILL.md content shipped to `~/.claude/skills/mdscroll/` via `install-skill`.                                                                                       |
+| `install-skill.ts` | `installSkill(opts)` writes the skill to disk. `runInstallSkill` is the CLI wrapper.                                                                                    |
 
 Data flow on push:
 

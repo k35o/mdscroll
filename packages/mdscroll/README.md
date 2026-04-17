@@ -81,6 +81,26 @@ Mermaid renders client-side from CDN the first time a diagram appears, then re-r
 - Dangerous URL schemes (e.g. `javascript:`) are rejected by markdown-it's default validator.
 - The server binds to `127.0.0.1` by default. Override with `--host` only if you understand the exposure.
 
+## Claude Code integration
+
+mdscroll ships a [Claude Code Skill](https://docs.claude.com/en/docs/claude-code/skills) so that an AI assistant can send its own generated Markdown to your browser without manual piping.
+
+Install the skill once:
+
+```bash
+mdscroll install-skill
+# writes ~/.claude/skills/mdscroll/SKILL.md
+```
+
+With the skill installed, Claude Code automatically uses `mdscroll push` when you ask it to "show me the plan in the browser" or when it generates a long structured document that would be easier to read rendered.
+
+Options:
+
+```bash
+mdscroll install-skill --name show        # install as ~/.claude/skills/show/
+mdscroll install-skill --dir /custom/path # install to a different directory
+```
+
 ## Status
 
 Early, but stable for daily personal use. Feedback welcome.

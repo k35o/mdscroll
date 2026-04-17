@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+import { runInstallSkill } from './install-skill.js';
 import { runPush } from './push.js';
 import { runStart } from './start.js';
 
@@ -12,6 +13,11 @@ type StartCliOptions = {
 type PushCliOptions = {
   port: string;
   host: string;
+};
+
+type InstallSkillCliOptions = {
+  dir?: string;
+  name?: string;
 };
 
 const program = new Command();
@@ -45,6 +51,18 @@ program
       file,
       port: Number(opts.port),
       host: opts.host,
+    });
+  });
+
+program
+  .command('install-skill')
+  .description('Install the mdscroll Claude Code skill to ~/.claude/skills/')
+  .option('--dir <dir>', 'Install directory (default: ~/.claude/skills)')
+  .option('--name <name>', 'Skill directory name (default: mdscroll)')
+  .action(async (opts: InstallSkillCliOptions) => {
+    await runInstallSkill({
+      dir: opts.dir,
+      name: opts.name,
     });
   });
 
