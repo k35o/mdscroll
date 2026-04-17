@@ -1,9 +1,15 @@
 import { spawn } from 'node:child_process';
-import { basename } from 'node:path';
 import { readFile } from 'node:fs/promises';
+import { relative, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_INSTANCE_NAME, readLock, removeLock } from '../store/lockfile.js';
+
+export const sourceFor = (file: string | undefined): string => {
+  if (!file) return 'stdin';
+  const rel = relative(process.cwd(), resolve(file));
+  return rel === '' ? '.' : rel;
+};
 
 export type PushOptions = {
   name?: string | undefined;
@@ -62,7 +68,7 @@ export const runPush = async (opts: PushOptions): Promise<void> => {
     return;
   }
 
-  const source = opts.file ? basename(opts.file) : 'stdin';
+  const source = sourceFor(opts.file);
 
   const existing = await readLock(name);
   if (existing) {

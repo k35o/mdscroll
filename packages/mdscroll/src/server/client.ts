@@ -488,6 +488,7 @@ const renderSidebar = () => {
     const source = document.createElement('span');
     source.className = 'mdscroll-history-source';
     source.textContent = snap.source;
+    source.title = snap.source;
     li.appendChild(time);
     li.appendChild(source);
     li.addEventListener('click', () => viewSnapshot(snap.id));
