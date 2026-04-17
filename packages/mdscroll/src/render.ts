@@ -1,4 +1,6 @@
 import MarkdownIt from 'markdown-it';
+import alertsPlugin from 'markdown-it-github-alerts';
+import taskListsPlugin from 'markdown-it-task-lists';
 import { createHighlighter, type Highlighter } from 'shiki';
 
 const LANGS = [
@@ -42,6 +44,7 @@ const buildRenderer = (highlighter: Highlighter): MarkdownIt => {
     typographer: true,
     breaks: false,
     highlight: (code, lang) => {
+      if (lang === 'mermaid') return '';
       const resolved = (lang || '').toLowerCase();
       const langSupported = (LANGS as readonly string[]).includes(resolved);
       try {
@@ -55,6 +58,22 @@ const buildRenderer = (highlighter: Highlighter): MarkdownIt => {
       }
     },
   });
+
+  md.use(taskListsPlugin, { enabled: true });
+  md.use(alertsPlugin);
+
+  const defaultFence = md.renderer.rules.fence;
+  md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+    const token = tokens[idx];
+    if (!token) return '';
+    if (token.info.trim() === 'mermaid') {
+      return `<pre class="mermaid">${md.utils.escapeHtml(token.content)}</pre>\n`;
+    }
+    return defaultFence
+      ? defaultFence(tokens, idx, options, env, self)
+      : self.renderToken(tokens, idx, options);
+  };
+
   return md;
 };
 

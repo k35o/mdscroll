@@ -32,6 +32,11 @@ export const STYLES_CSS = `:root {
   --accent: #0969da;
   --status-idle: #59636e;
   --status-live: #1a7f37;
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -44,6 +49,11 @@ export const STYLES_CSS = `:root {
     --accent: #4493f8;
     --status-idle: #9198a1;
     --status-live: #3fb950;
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
   }
 }
 * { box-sizing: border-box; }
@@ -159,6 +169,61 @@ body {
   margin: 24px 0;
 }
 .markdown-body img { max-width: 100%; }
+.markdown-body del, .markdown-body s { color: var(--fg-mute); }
+/* Task lists */
+.markdown-body .contains-task-list { list-style: none; padding-left: 0; }
+.markdown-body .task-list-item input[type="checkbox"] {
+  margin-right: .5em;
+  vertical-align: middle;
+  accent-color: var(--accent);
+}
+.markdown-body .task-list-item .contains-task-list { padding-left: 1.5em; margin-top: .25em; }
+/* GFM Alerts */
+.markdown-body .markdown-alert {
+  padding: .5rem 1rem;
+  margin: 0 0 16px;
+  border-left: .25em solid var(--border);
+  color: inherit;
+}
+.markdown-body .markdown-alert > :first-child { margin-top: 0; }
+.markdown-body .markdown-alert > :last-child { margin-bottom: 0; }
+.markdown-body .markdown-alert-title {
+  display: flex;
+  font-weight: 600;
+  align-items: center;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+.markdown-body .markdown-alert-title .octicon {
+  margin-right: .5rem;
+  fill: currentColor;
+  overflow: visible;
+  vertical-align: text-bottom;
+}
+.markdown-body .markdown-alert-note { border-left-color: var(--color-note); }
+.markdown-body .markdown-alert-note .markdown-alert-title { color: var(--color-note); }
+.markdown-body .markdown-alert-tip { border-left-color: var(--color-tip); }
+.markdown-body .markdown-alert-tip .markdown-alert-title { color: var(--color-tip); }
+.markdown-body .markdown-alert-warning { border-left-color: var(--color-warning); }
+.markdown-body .markdown-alert-warning .markdown-alert-title { color: var(--color-warning); }
+.markdown-body .markdown-alert-caution { border-left-color: var(--color-caution); }
+.markdown-body .markdown-alert-caution .markdown-alert-title { color: var(--color-caution); }
+.markdown-body .markdown-alert-important { border-left-color: var(--color-important); }
+.markdown-body .markdown-alert-important .markdown-alert-title { color: var(--color-important); }
+/* Mermaid */
+.markdown-body pre.mermaid {
+  background: transparent;
+  padding: 16px;
+  text-align: center;
+  margin: 0 0 16px;
+  border: 1px solid var(--border-mute);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+.markdown-body pre.mermaid[data-mermaid-state="error"] {
+  text-align: left;
+  color: var(--color-caution);
+}
 /* Shiki dark theme via CSS var */
 @media (prefers-color-scheme: dark) {
   .shiki,
@@ -175,11 +240,51 @@ body {
 export const CLIENT_JS = `const statusEl = document.getElementById('mdscroll-status');
 const contentEl = document.getElementById('mdscroll-content');
 
+const MERMAID_CDN = 'https://cdn.jsdelivr.net/npm/mermaid@11.14.0/dist/mermaid.esm.min.mjs';
+let mermaidPromise = null;
+const loadMermaid = () => {
+  if (!mermaidPromise) {
+    mermaidPromise = import(MERMAID_CDN).then((mod) => {
+      const mermaid = mod.default;
+      const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      mermaid.initialize({ startOnLoad: false, theme: isDark ? 'dark' : 'default' });
+      return mermaid;
+    });
+  }
+  return mermaidPromise;
+};
+
+const renderMermaid = async (root) => {
+  const blocks = root.querySelectorAll('pre.mermaid:not([data-mermaid-state])');
+  if (blocks.length === 0) return;
+  let mermaid;
+  try {
+    mermaid = await loadMermaid();
+  } catch (err) {
+    console.warn('mdscroll: failed to load mermaid', err);
+    return;
+  }
+  for (const block of blocks) {
+    const source = block.textContent || '';
+    const id = 'mdscroll-mermaid-' + Math.random().toString(36).slice(2);
+    try {
+      const { svg } = await mermaid.render(id, source);
+      block.innerHTML = svg;
+      block.dataset.mermaidState = 'done';
+    } catch (err) {
+      block.dataset.mermaidState = 'error';
+      block.textContent = String(err && err.message ? err.message : err);
+    }
+  }
+};
+
 const setStatus = (state, text) => {
   if (!statusEl) return;
   statusEl.dataset.state = state;
   statusEl.textContent = text;
 };
+
+if (contentEl) renderMermaid(contentEl);
 
 const source = new EventSource('/events');
 source.addEventListener('open', () => setStatus('live', 'live'));
@@ -189,6 +294,7 @@ source.addEventListener('update', (event) => {
     const payload = JSON.parse(event.data);
     if (contentEl && typeof payload.html === 'string') {
       contentEl.innerHTML = payload.html;
+      renderMermaid(contentEl);
     }
   } catch (err) {
     console.warn('mdscroll: bad update payload', err);
