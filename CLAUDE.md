@@ -86,13 +86,14 @@ pnpm -F mdscroll dev      # vp pack --watch
 3. Reference as `"catalog:"` in the consuming package's `package.json`.
 4. `pnpm install`.
 
-## Release (not yet wired)
+## Release
 
-Changesets will be added before `v0.1.0`:
+Versioning and publishing use [Changesets](https://github.com/changesets/changesets).
 
+```bash
+pnpm changeset       # record the change (interactive; writes .changeset/<name>.md)
+pnpm version         # bumps package.json + CHANGELOG based on pending changesets
+pnpm release         # pnpm build && changeset publish (to npm)
 ```
-pnpm changeset         # record the change
-pnpm changeset version # bump + update CHANGELOG
-pnpm build
-pnpm changeset publish # push to npm
-```
+
+Config: `.changeset/config.json` uses `@changesets/changelog-github` (repo `k35o/mdscroll`) and `access: public`. Baseline branch is `main`.

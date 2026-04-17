@@ -57,6 +57,14 @@ mdscroll/
 └── tsconfig.json              # strict base extended by the package
 ```
 
+## Release
+
+```bash
+pnpm changeset       # record a change
+pnpm version         # apply pending changesets (bumps versions + CHANGELOG)
+pnpm release         # build + publish to npm
+```
+
 ## License
 
 MIT © k8o
