@@ -12,6 +12,7 @@
   "scripts": {
     "build": "vp run -r build",
     "test": "vp run -r test",
+    "test:e2e": "vp run -r test:e2e",
     "typecheck": "vp run -r typecheck",
     "check": "vp check",
     "check:write": "vp check --fix",

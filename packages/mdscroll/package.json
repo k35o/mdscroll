@@ -38,6 +38,7 @@
     "dev": "vp pack --watch",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "pnpm build && vitest run --config vitest.e2e.config.ts",
     "typecheck": "tsc --noEmit",
     "check": "vp check",
     "check:write": "vp check --fix"

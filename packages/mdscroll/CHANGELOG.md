@@ -7,7 +7,6 @@
 - [#7](https://github.com/k35o/mdscroll/pull/7) [`de2a50d`](https://github.com/k35o/mdscroll/commit/de2a50d2ec7170d53746f04cc7e028238b808c04) Thanks [@k35o](https://github.com/k35o)! - Breaking: collapse mdscroll to a foreground-only, single-instance server with zero disk state.
 
   **Removed**
-
   - `mdscroll push`, `mdscroll stop`, `mdscroll list` subcommands.
   - `--name` / `-n` option and per-name instance isolation.
   - `~/.mdscroll/` state directory (lockfiles, logs).
