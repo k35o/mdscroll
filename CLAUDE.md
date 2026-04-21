@@ -4,44 +4,74 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`mdscroll` is a CLI that previews a markdown file (or piped markdown) in the local browser. It is a **foreground, single-instance** process — no daemon, no lockfile, no state on disk. Built for AI workflows: an agent writes a plan to a file, the user runs `mdscroll <file>` once, and every update the agent makes to the file is reflected in the browser over SSE.
+`mdscroll` is a CLI that previews markdown in the local browser. Every invocation is a **foreground process** (Ctrl+C to quit) — there is still no daemon and no disk state — but multiple invocations cooperate over TCP so they share one browser tab strip instead of proliferating ports.
 
-Surface area:
+### Two modes per invocation
 
-- `mdscroll <file>` — read the file, serve it, watch it, re-render on every change. Foreground, Ctrl+C to quit.
-- `mdscroll` (with piped stdin) — read stdin to EOF, serve once. Foreground, Ctrl+C to quit.
-- `mdscroll` (TTY, no file) — print usage and exit 1.
-- `mdscroll --port <n>` / `--host <h>` — change the bind address. Port collisions fall back to a free port via get-port.
+The CLI decides its mode at startup based on whether the target port (default `127.0.0.1:4977`) is free:
 
-No subcommands. No `--name`. No `push` / `stop` / `list`. The only "state" is what's in the running process's memory.
+- **Server mode** — the first invocation binds the port, hosts the UI, and registers its own document.
+- **Client mode** — subsequent invocations hit the port, recognise the existing mdscroll via `GET /_/health`, POST their document, and stream their file's updates over HTTP. They stay foreground; Ctrl+C `DELETE`s their document from the server.
+- **Fallback** — if the port is taken by a non-mdscroll process, the caller falls back to a random free port (via `get-port`) and becomes a server on that. A note is printed so the user knows.
 
-Browser opening is intentionally not handled by the CLI. The host environment (system default browser, cmux pane, an AI agent's open-helper, etc) is responsible for navigating to the URL.
+### Surface area
 
-The agent skill lives at `skills/mdscroll/SKILL.md` (repo root) following the [agentskills.io](https://agentskills.io) spec. Users install it with `gh skill install k35o/mdscroll` (or any agentskills-compatible installer). The skill is **not** bundled into the npm package — it's a static file in the GitHub repo.
+- `mdscroll <file>` — watch and serve (or push) a markdown file.
+- `cat file.md | mdscroll` — read stdin to EOF, serve (or push) once.
+- `mdscroll` (TTY, no file) — print usage, exit 1.
+- `mdscroll --port <n>` / `--host <h>` — change the bind address; the discovery flow still applies.
+
+No subcommands, no `--name`, no explicit `push` / `stop` / `list`. All state lives in the running processes' memory — the server keeps a per-doc write token in RAM and hands it to the push client on POST.
+
+### HTTP API (private)
+
+Routes under `/_/*` are the push surface:
+
+- `GET /_/health` — `{ agent: 'mdscroll', version, pid }`; discovery probe.
+- `POST /_/docs` — body `{ source, markdown, ownerPid? }`; returns `{ id, token }`.
+- `PUT /_/docs/:id` — `Authorization: Bearer <token>`; partial update.
+- `DELETE /_/docs/:id` — `Authorization: Bearer <token>`; used on Ctrl+C.
+
+The token exists solely so one localhost mdscroll cannot accidentally overwrite another's document. It is not a security boundary — any local process can POST a fresh doc.
+
+### Liveness GC
+
+Each doc carries its `ownerPid`. The server checks `process.kill(pid, 0)` every 5 seconds and removes docs whose owner has exited. This covers abrupt crashes (`kill -9`, host suspend, etc.) where the client never gets to DELETE.
+
+### Browser UI
+
+The client HTML is a tab shell: a strip of tabs, a content article, a status dot. All content is driven by SSE `/events`, which emits `init` (all docs, pre-rendered), `added`, `updated`, and `removed`. Clicking a tab switches which doc's HTML is mounted into `#mdscroll-content`. Tail-follow (snap to bottom when already near it) still works per-active-doc.
+
+Browser opening is still not handled by the CLI — the host environment (system default browser, cmux pane, AI agent's open helper, etc.) navigates to the URL.
+
+### Skill
+
+The agent skill lives at `skills/mdscroll/SKILL.md` (repo root), following the [agentskills.io](https://agentskills.io) spec. Users install it with `gh skill install k35o/mdscroll`. Not bundled into the npm package.
 
 ## Architecture
 
 Monorepo (pnpm workspaces). One package today: `packages/mdscroll`.
 
-Source layout (`packages/mdscroll/src/`):
-
 ```
 mdscroll/                          # repo root
 ├── skills/mdscroll/SKILL.md       # agent skill (agentskills.io spec)
 └── packages/mdscroll/src/
-    ├── cli.ts                     # commander entry (single command, no subcommands)
-    ├── run.ts                     # runMdscroll(opts) + ingestContent(opts, store); orchestrates file / stdin / TTY-help branches, warms up the renderer, binds the server, wires SIGINT/SIGTERM.
-    ├── watch.ts                   # watchFile(path, onChange): fs.watch on the parent dir, filter by basename (survives editor swap-save), 100ms trailing debounce.
-    ├── source.ts                  # fileSourceLabel(file) → cwd-relative path; stdinSourceLabel(md) → first H1 or '(untitled)'.
-    ├── port.ts                    # resolvePort (get-port) — prefer requested, fall back to free.
-    ├── constants.ts               # DEFAULT_HOST / DEFAULT_PORT.
-    ├── types.d.ts                 # ambient types (untyped markdown-it-task-lists).
+    ├── cli.ts                     # commander entry (single command)
+    ├── run.ts                     # loadSource() + runServerMode() + runClientMode(); orchestrates discovery
+    ├── discover.ts                # try bind → on EADDRINUSE probe /_/health → server | client | fallback
+    ├── bind.ts                    # promise wrapper around @hono/node-server `serve()` that settles on 'listening' / 'error'
+    ├── push-client.ts             # POST / PUT / DELETE /_/docs for client mode
+    ├── liveness.ts                # periodic process.kill(ownerPid, 0) GC
+    ├── watch.ts                   # fs.watch on the parent dir, 100ms debounce
+    ├── source.ts                  # fileSourceLabel / stdinSourceLabel / displaySourceLabel
+    ├── port.ts                    # resolvePort (get-port)
+    ├── constants.ts               # DEFAULT_HOST / DEFAULT_PORT (4977)
     ├── server/
-    │   ├── app.tsx                # createApp(store) + startServer({port, host, store}). Routes: GET /, /style.css, /main.js, /events (SSE). No POST, no identity, no snapshot API. GET / sets a strict CSP.
-    │   ├── render.ts              # markdown-it + shiki + mermaid fence + GFM plugins.
-    │   └── client.tsx             # Hono JSX Document + Header (brand / source label / status), plus STYLES_CSS and CLIENT_JS string exports. CLIENT_JS subscribes to /events and swaps #mdscroll-content + #mdscroll-source on each update.
+    │   ├── app.tsx                # createApp(store, meta) + startServer. Routes: GET /, /style.css, /main.js, /events, /_/health, /_/docs*.
+    │   ├── render.ts              # markdown-it + shiki + mermaid + GFM plugins
+    │   └── client.tsx             # Document shell, STYLES_CSS, CLIENT_JS (tab strip + SSE wiring)
     └── store/
-        └── state.ts               # Snapshot { markdown, source, createdAt } + Store { current(), setCurrent(), subscribe() }. Single-slot, in-memory, no history.
+        └── state.ts               # Multi-doc Map + per-doc token + event subscribers (added/updated/removed)
 ```
 
 Dependency layers (no cycles):
@@ -49,34 +79,48 @@ Dependency layers (no cycles):
 ```
 cli
  └─ run
-      ├─ watch            (fs.watch + debounce)
-      ├─ source           (label resolution)
-      ├─ port             (get-port fallback)
-      ├─ server/app       (Hono routes + startServer)
-      │    ├─ server/client  (JSX shell + CSS/JS)
-      │    ├─ server/render  (markdown-it + shiki + mermaid)
-      │    └─ store/state    (current + subscribe)
+      ├─ discover
+      │    ├─ bind
+      │    └─ port
+      ├─ push-client
+      ├─ liveness
+      ├─ watch
+      ├─ source
+      ├─ server/app
+      │    ├─ server/client
+      │    ├─ server/render
+      │    └─ store/state
       └─ store/state
 ```
 
 Tests live alongside their source (`*.test.ts`).
 
-Data flow on a file save:
+### Data flow (file save, server mode)
 
 ```
 fs.watch (parent dir)
-  → debounce 100ms → readFile → store.setCurrent(md, label) → listeners
-  → SSE 'update' { html, source } → browser swaps #mdscroll-content + updates #mdscroll-source
+  → debounce 100ms → readFile
+  → store.update(docId, {markdown}) → listeners
+  → SSE 'updated' { doc: {id, html, source, ...} }
+  → browser: upsertDoc → if active, swap #mdscroll-content
 ```
 
-Stdin mode runs the first two steps once at startup; no watcher is attached.
+### Data flow (file save, client mode)
+
+```
+fs.watch (parent dir) in client process
+  → debounce 100ms → readFile
+  → PUT /_/docs/:id on server (serialized — one in-flight at a time)
+  → server: store.update → listeners → SSE to browser (same as above)
+```
 
 ## Commands
 
 ```bash
 pnpm install          # respects minimumReleaseAge (7d), verifyDepsBeforeRun: install
 pnpm build            # vp run -r build (→ vp pack → tsdown → dist/cli.mjs with shebang)
-pnpm test             # vitest (~1s, 83 tests)
+pnpm test             # vitest — unit tests only (~1s). E2E is excluded by vitest.config.ts.
+pnpm test:e2e         # builds the CLI, then spawns it and exercises the full push flow (~15s; needs a host shell)
 pnpm typecheck        # tsc --noEmit
 pnpm check            # oxlint + oxfmt
 pnpm check:write      # auto-fix
@@ -91,7 +135,11 @@ pnpm -F mdscroll test
 pnpm -F mdscroll dev      # vp pack --watch
 ```
 
-Note: `port.test.ts` and `watch.test.ts` bind localhost ports and open `fs.watch` handles respectively, so they fail under Claude Code's default sandbox (EPERM / EMFILE). Run them with the sandbox disabled or from a host shell.
+Notes:
+
+- `port.test.ts`, `watch.test.ts`, and `discover.test.ts` bind localhost ports and/or open `fs.watch` handles, so they fail under Claude Code's default sandbox (EPERM / EMFILE). Run the normal `pnpm test` with the sandbox disabled or from a host shell.
+- `e2e.test.ts` is excluded from the default `pnpm test` via `packages/mdscroll/vitest.config.ts` — run it with `pnpm test:e2e`. That script builds the CLI first and then spawns it, needing a host shell and adding ~15s because one scenario waits on the 5s liveness GC tick.
+- When a previous version's daemon (`mdscroll 0.1.x`) holds `:4977`, the new CLI probes `/_/health`, gets 404, and falls back to a random port. Kill the old daemon or use `--port` to avoid the fallback message.
 
 ## Conventions
 
@@ -104,12 +152,7 @@ Note: `port.test.ts` and `watch.test.ts` bind localhost ports and open `fs.watch
 - **`catalog:`** for every shared dep. New deps must have a version published ≥ 7 days ago (`minimumReleaseAge: 10080`).
 - **English only** for all in-repo text (SKILL.md content, tests, comments, docs) — this is a public npm package.
 - **No npx in CI or scripts.** Any tool used by the repo must be declared in `devDependencies` (via catalog where shared) and invoked as a local binary. End-user docs can still suggest `npx mdscroll` — that is the user's choice.
-- **Testing philosophy**: see `~/.claude/skills/testing/`. Summary:
-  - AAA (Arrange-Act-Assert) structure
-  - 1 test 1 behavior
-  - `describe` / `it` names describe behavior, not implementation
-  - Per-test isolation (e.g. `tmpdir` for fs tests)
-  - Avoid self-fulfilling assertions (don't recompute the expected in the test)
+- **Testing philosophy**: see `~/.claude/skills/testing/`. AAA, 1 test / 1 behavior, behavior-named describes, per-test isolation, no self-fulfilling assertions.
 
 ## Adding a dependency
 

@@ -1,27 +1,6 @@
 import type { FC } from 'hono/jsx';
 
-type DocumentProps = {
-  /** Pre-rendered HTML (from markdown-it + shiki) inlined into <article>. */
-  contentHtml: string;
-  /** Label shown in the header describing what we're looking at. */
-  source: string;
-};
-
-type HeaderProps = { source: string };
-
-const Header: FC<HeaderProps> = ({ source }) => (
-  <header class="mdscroll-shell-header">
-    <span class="mdscroll-brand">mdscroll</span>
-    <span class="mdscroll-source" id="mdscroll-source" title={source}>
-      {source}
-    </span>
-    <span class="mdscroll-status" id="mdscroll-status" data-state="idle">
-      idle
-    </span>
-  </header>
-);
-
-export const Document: FC<DocumentProps> = ({ contentHtml, source }) => (
+export const Document: FC = () => (
   <html lang="en">
     <head>
       <meta charset="utf-8" />
@@ -31,16 +10,24 @@ export const Document: FC<DocumentProps> = ({ contentHtml, source }) => (
     </head>
     <body>
       <div class="mdscroll-shell">
-        <Header source={source} />
-        <main class="mdscroll-main">
-          <article
-            id="mdscroll-content"
-            class="markdown-body"
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: content
-            // is produced by our own markdown-it renderer (html: false,
-            // shiki-highlighted) and is the whole point of the server.
-            dangerouslySetInnerHTML={{ __html: contentHtml }}
+        <header class="mdscroll-shell-header">
+          <span class="mdscroll-brand">mdscroll</span>
+          <nav
+            class="mdscroll-tabs"
+            id="mdscroll-tabs"
+            role="tablist"
+            aria-label="Open documents"
           />
+          <span class="mdscroll-status" id="mdscroll-status" data-state="idle">
+            idle
+          </span>
+        </header>
+        <main class="mdscroll-main">
+          <article id="mdscroll-content" class="markdown-body" aria-live="polite" />
+          <p class="mdscroll-empty" id="mdscroll-empty" hidden>
+            No documents yet. Run <code>mdscroll &lt;file&gt;</code> in another terminal to push one
+            here.
+          </p>
         </main>
       </div>
       <script type="module" src="/main.js" />
@@ -101,7 +88,7 @@ body {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 20px 0;
+  padding: 20px 0 0;
   border-bottom: 1px solid var(--border-mute);
   margin-bottom: 32px;
 }
@@ -111,19 +98,51 @@ body {
   color: var(--fg-mute);
   font-size: 14px;
   flex-shrink: 0;
+  padding-bottom: 20px;
 }
-.mdscroll-source {
+.mdscroll-tabs {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 13px;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  align-items: flex-end;
+}
+.mdscroll-tab {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 240px;
+  padding: 8px 12px 10px;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
   color: var(--fg-mute);
+  font-size: 13px;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
-  /* Truncation happens in source.ts (displaySourceLabel) so the end of
-     the path — typically the filename — is always visible. No
-     text-overflow: ellipsis here: the server already inserts a leading
-     horizontal ellipsis character when needed. */
+  text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
+}
+.mdscroll-tab:hover { color: var(--fg); }
+.mdscroll-tab[aria-selected="true"] {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+}
+.mdscroll-tab .mdscroll-tab-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 6px;
+  background: var(--status-live);
+  flex-shrink: 0;
+}
+.mdscroll-tab > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .mdscroll-status {
   flex-shrink: 0;
@@ -132,6 +151,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding-bottom: 20px;
 }
 .mdscroll-status::before {
   content: "";
@@ -142,6 +162,17 @@ body {
 .mdscroll-status[data-state="live"] { color: var(--status-live); }
 .mdscroll-main {
   padding-bottom: 96px;
+}
+.mdscroll-empty {
+  color: var(--fg-mute);
+  font-size: 14px;
+  padding: 24px 0;
+}
+.mdscroll-empty code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  background: var(--bg-raised);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 .markdown-body { font-size: 16px; line-height: 1.6; word-wrap: break-word; }
 .markdown-body > *:first-child { margin-top: 0; }
@@ -213,7 +244,6 @@ body {
 }
 .markdown-body img { max-width: 100%; }
 .markdown-body del, .markdown-body s { color: var(--fg-mute); }
-/* Task lists */
 .markdown-body .contains-task-list { list-style: none; padding-left: 0; }
 .markdown-body .task-list-item input[type="checkbox"] {
   margin-right: .5em;
@@ -221,7 +251,6 @@ body {
   accent-color: var(--accent);
 }
 .markdown-body .task-list-item .contains-task-list { padding-left: 1.5em; margin-top: .25em; }
-/* GFM Alerts */
 .markdown-body .markdown-alert {
   padding: .5rem 1rem;
   margin: 0 0 16px;
@@ -253,7 +282,6 @@ body {
 .markdown-body .markdown-alert-caution .markdown-alert-title { color: var(--color-caution); }
 .markdown-body .markdown-alert-important { border-left-color: var(--color-important); }
 .markdown-body .markdown-alert-important .markdown-alert-title { color: var(--color-important); }
-/* Mermaid */
 .markdown-body pre.mermaid {
   background: transparent;
   padding: 16px;
@@ -267,7 +295,6 @@ body {
   text-align: left;
   color: var(--color-caution);
 }
-/* Shiki dark theme via CSS var */
 @media (prefers-color-scheme: dark) {
   .shiki,
   .shiki span {
@@ -281,8 +308,9 @@ body {
 `;
 
 export const CLIENT_JS = `const statusEl = document.getElementById('mdscroll-status');
-const sourceEl = document.getElementById('mdscroll-source');
+const tabsEl = document.getElementById('mdscroll-tabs');
 const contentEl = document.getElementById('mdscroll-content');
+const emptyEl = document.getElementById('mdscroll-empty');
 
 const MERMAID_CDN = 'https://cdn.jsdelivr.net/npm/mermaid@11.14.0/dist/mermaid.esm.min.mjs';
 let mermaidPromise = null;
@@ -329,11 +357,9 @@ const setStatus = (state, text) => {
 };
 
 // Tail-follow: when the viewport is already near the bottom before an
-// update, snap back to the bottom after swapping content. This mirrors
-// \`tail -f\`: if the user is reading the latest content, stay with it;
-// if they've scrolled up to read earlier sections, leave them alone.
-// Threshold is intentionally generous (200px) because users often stop
-// reading a few lines above the real bottom.
+// update, snap back to the bottom after swapping content. Threshold is
+// intentionally generous (200px) because users often stop reading a few
+// lines above the real bottom.
 const BOTTOM_STICK_THRESHOLD = 200;
 const isNearBottom = () => {
   const doc = document.documentElement;
@@ -343,37 +369,136 @@ const scrollToBottom = () => {
   window.scrollTo({ top: document.documentElement.scrollHeight });
 };
 
-const setContent = (html) => {
+// ---- State ----
+/** Map<id, { id, source, displaySource, html }> */
+const docs = new Map();
+let activeId = null;
+
+const applyContent = (html, { stick }) => {
   if (!contentEl) return;
-  const shouldStick = isNearBottom();
+  const shouldStick = stick && isNearBottom();
   contentEl.innerHTML = html;
   if (shouldStick) scrollToBottom();
   void (async () => {
     await renderMermaid(contentEl);
-    // Mermaid loads asynchronously from the CDN; once its SVGs land the
-    // document grows, so re-snap if we were sticking to the bottom.
     if (shouldStick) scrollToBottom();
   })();
 };
 
-const setSource = (source) => {
-  if (!sourceEl || typeof source !== 'string') return;
-  sourceEl.textContent = source;
-  sourceEl.title = source;
+const renderEmpty = () => {
+  if (contentEl) contentEl.innerHTML = '';
+  if (emptyEl) emptyEl.hidden = false;
 };
 
-if (contentEl) void renderMermaid(contentEl);
+const renderActive = ({ stick }) => {
+  if (!activeId) {
+    renderEmpty();
+    return;
+  }
+  const doc = docs.get(activeId);
+  if (!doc) {
+    renderEmpty();
+    return;
+  }
+  if (emptyEl) emptyEl.hidden = true;
+  applyContent(doc.html, { stick });
+};
+
+const renderTabs = () => {
+  if (!tabsEl) return;
+  tabsEl.innerHTML = '';
+  for (const doc of docs.values()) {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.className = 'mdscroll-tab';
+    tab.setAttribute('role', 'tab');
+    tab.setAttribute('aria-selected', doc.id === activeId ? 'true' : 'false');
+    tab.dataset.id = doc.id;
+    tab.title = doc.source;
+    // Dot indicates liveness; reserved for future per-tab state.
+    const dot = document.createElement('span');
+    dot.className = 'mdscroll-tab-dot';
+    tab.appendChild(dot);
+    const label = document.createElement('span');
+    // Tabs get the basename only; the full path is on the tooltip.
+    // displaySource may contain slashes (e.g. "docs/plan.md") or a
+    // truncated path ("…ser/plan.md") — split on '/' either way.
+    const parts = (doc.displaySource || doc.source || '').split('/');
+    label.textContent = parts[parts.length - 1] || doc.displaySource;
+    tab.appendChild(label);
+    tab.addEventListener('click', () => {
+      if (activeId === doc.id) return;
+      activeId = doc.id;
+      renderTabs();
+      renderActive({ stick: false });
+    });
+    tabsEl.appendChild(tab);
+  }
+};
+
+const upsertDoc = (doc) => {
+  const existed = docs.has(doc.id);
+  docs.set(doc.id, doc);
+  if (!activeId) activeId = doc.id;
+  renderTabs();
+  if (doc.id === activeId) {
+    // On update of the currently visible doc, preserve tail-follow.
+    renderActive({ stick: existed });
+  }
+};
+
+const removeDoc = (id) => {
+  if (!docs.has(id)) return;
+  docs.delete(id);
+  if (activeId === id) {
+    const next = docs.keys().next();
+    activeId = next.done ? null : next.value;
+  }
+  renderTabs();
+  renderActive({ stick: false });
+};
 
 const stream = new EventSource('/events');
 stream.addEventListener('open', () => setStatus('live', 'live'));
 stream.addEventListener('error', () => setStatus('idle', 'reconnecting'));
-stream.addEventListener('update', (event) => {
+stream.addEventListener('init', (event) => {
   try {
     const payload = JSON.parse(event.data);
-    if (typeof payload.html === 'string') setContent(payload.html);
-    setSource(payload.source);
+    docs.clear();
+    activeId = null;
+    for (const doc of payload.docs || []) {
+      docs.set(doc.id, doc);
+    }
+    const first = docs.keys().next();
+    activeId = first.done ? null : first.value;
+    renderTabs();
+    renderActive({ stick: false });
   } catch (err) {
-    console.warn('mdscroll: bad update payload', err);
+    console.warn('mdscroll: bad init payload', err);
+  }
+});
+stream.addEventListener('added', (event) => {
+  try {
+    const payload = JSON.parse(event.data);
+    upsertDoc(payload.doc);
+  } catch (err) {
+    console.warn('mdscroll: bad added payload', err);
+  }
+});
+stream.addEventListener('updated', (event) => {
+  try {
+    const payload = JSON.parse(event.data);
+    upsertDoc(payload.doc);
+  } catch (err) {
+    console.warn('mdscroll: bad updated payload', err);
+  }
+});
+stream.addEventListener('removed', (event) => {
+  try {
+    const payload = JSON.parse(event.data);
+    removeDoc(payload.id);
+  } catch (err) {
+    console.warn('mdscroll: bad removed payload', err);
   }
 });
 `;

@@ -3,9 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ingestContent } from './run.js';
+import { loadSource } from './run.js';
 import { UNTITLED } from './source.js';
-import { Store } from './store/state.js';
 
 type FakeStdin = Readable & { isTTY?: boolean };
 
@@ -20,7 +19,7 @@ const fakeStdin = (content: string | null): FakeStdin => {
   return stream;
 };
 
-describe('ingestContent', () => {
+describe('loadSource', () => {
   describe('file mode', () => {
     let dir: string;
     let file: string;
@@ -35,51 +34,57 @@ describe('ingestContent', () => {
       rmSync(dir, { recursive: true, force: true });
     });
 
-    it('loads the file into the store and returns a stop function', async () => {
-      const store = new Store();
-      const result = await ingestContent({ file }, store);
+    it('loads the file as the initial payload', async () => {
+      const result = await loadSource({ file });
       expect(result.kind).toBe('ready');
-      expect(store.current()?.markdown).toBe('# from file');
-      if (result.kind === 'ready') result.stop();
+      if (result.kind !== 'ready') return;
+      expect(result.feed.initial.markdown).toBe('# from file');
     });
 
     it('uses the cwd-relative path as the source label', async () => {
-      const store = new Store();
-      const result = await ingestContent({ file }, store);
-      expect(store.current()?.source).toContain('plan.md');
-      if (result.kind === 'ready') result.stop();
+      const result = await loadSource({ file });
+      if (result.kind !== 'ready') throw new Error('expected ready');
+      expect(result.feed.initial.source).toContain('plan.md');
     });
 
     it('returns an error result when the file does not exist', async () => {
-      const store = new Store();
-      const result = await ingestContent({ file: join(dir, 'missing.md') }, store);
+      const result = await loadSource({ file: join(dir, 'missing.md') });
       expect(result.kind).toBe('error');
-      expect(store.current()).toBeNull();
     });
   });
 
   describe('stdin mode', () => {
     it('reads stdin once and derives the label from the first H1', async () => {
-      const store = new Store();
-      const result = await ingestContent({ stdin: fakeStdin('# Piped Title\n\nbody') }, store);
+      const result = await loadSource({
+        stdin: fakeStdin('# Piped Title\n\nbody'),
+      });
       expect(result.kind).toBe('ready');
-      expect(store.current()?.markdown).toBe('# Piped Title\n\nbody');
-      expect(store.current()?.source).toBe('Piped Title');
+      if (result.kind !== 'ready') return;
+      expect(result.feed.initial.markdown).toBe('# Piped Title\n\nbody');
+      expect(result.feed.initial.source).toBe('Piped Title');
     });
 
     it('falls back to UNTITLED when there is no H1', async () => {
-      const store = new Store();
-      await ingestContent({ stdin: fakeStdin('## only h2\n\nbody') }, store);
-      expect(store.current()?.source).toBe(UNTITLED);
+      const result = await loadSource({
+        stdin: fakeStdin('## only h2\n\nbody'),
+      });
+      if (result.kind !== 'ready') throw new Error('expected ready');
+      expect(result.feed.initial.source).toBe(UNTITLED);
+    });
+
+    it('attach() returns a no-op close for stdin', async () => {
+      const result = await loadSource({ stdin: fakeStdin('# t') });
+      if (result.kind !== 'ready') throw new Error('expected ready');
+      const handle = result.feed.attach(() => undefined);
+      expect(typeof handle.close).toBe('function');
+      handle.close();
     });
   });
 
   describe('no-input mode', () => {
     it('returns no-input when stdin is a TTY and no file was given', async () => {
-      const store = new Store();
-      const result = await ingestContent({ stdin: fakeStdin(null) }, store);
+      const result = await loadSource({ stdin: fakeStdin(null) });
       expect(result.kind).toBe('no-input');
-      expect(store.current()).toBeNull();
     });
   });
 });

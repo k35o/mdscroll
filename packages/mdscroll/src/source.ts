@@ -1,6 +1,14 @@
-import { basename, relative, resolve } from 'node:path';
+import { basename, relative, resolve, sep } from 'node:path';
 
 export const UNTITLED = '(untitled)';
+
+/**
+ * Return a display string that uses forward slashes as separators
+ * regardless of platform. The browser tab strip and SSE payloads split
+ * on `/` to derive a basename; if we leave Windows-native `\` in the
+ * label the basename split is a no-op and tabs show the full path.
+ */
+const toForwardSlashes = (p: string): string => (sep === '/' ? p : p.split(sep).join('/'));
 
 /**
  * Label shown in the header when a file path was given on the CLI.
@@ -8,11 +16,15 @@ export const UNTITLED = '(untitled)';
  * `mdscroll docs/plan.md` keeps the subdirectory. An absolute path that
  * is not under cwd would render with `../..` prefixes, which is fine —
  * it's still short and unambiguous.
+ *
+ * The path is always emitted with `/` separators so the browser-side
+ * basename logic and the length-based truncation in `displaySourceLabel`
+ * work identically on Windows.
  */
 export const fileSourceLabel = (file: string): string => {
   const absolute = resolve(file);
   const rel = relative(process.cwd(), absolute);
-  return rel.length > 0 ? rel : basename(absolute);
+  return toForwardSlashes(rel.length > 0 ? rel : basename(absolute));
 };
 
 /**
