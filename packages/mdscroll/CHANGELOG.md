@@ -1,5 +1,11 @@
 # mdscroll
 
+## 0.3.0
+
+### Minor Changes
+
+- [#11](https://github.com/k35o/mdscroll/pull/11) [`67a03b8`](https://github.com/k35o/mdscroll/commit/67a03b8e65b6790463efd489b90a508eaf0481a3) Thanks [@k35o](https://github.com/k35o)! - Tabs and implicit push: running `mdscroll <file>` while another `mdscroll` is already listening on the target port no longer proliferates a new port. The second (and nth) invocation discovers the existing server via `GET /_/health`, POSTs its document to it, and the browser shows every open document as a tab in a single shared window. Clients keep their own file watchers and stream updates with `PUT /_/docs/:id`; Ctrl+C `DELETE`s their tab; a `process.kill(pid, 0)` liveness check on the server GCs tabs whose owner crashed. No daemon, no `~/.mdscroll/`, no `push` subcommand — it all happens automatically.
+
 ## 0.2.0
 
 ### Minor Changes
@@ -7,6 +13,7 @@
 - [#7](https://github.com/k35o/mdscroll/pull/7) [`de2a50d`](https://github.com/k35o/mdscroll/commit/de2a50d2ec7170d53746f04cc7e028238b808c04) Thanks [@k35o](https://github.com/k35o)! - Breaking: collapse mdscroll to a foreground-only, single-instance server with zero disk state.
 
   **Removed**
+
   - `mdscroll push`, `mdscroll stop`, `mdscroll list` subcommands.
   - `--name` / `-n` option and per-name instance isolation.
   - `~/.mdscroll/` state directory (lockfiles, logs).
