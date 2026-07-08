@@ -10,7 +10,7 @@ catalog:
   commander: 14.0.3
   get-port: 7.2.0
   hono: 4.12.14
-  markdown-it: 14.1.1
+  markdown-it: 14.2.0
   markdown-it-github-alerts: 1.0.1
   markdown-it-task-lists: 2.1.1
   shiki: 4.0.2
@@ -34,4 +34,6 @@ minimumReleaseAgeExclude:
   - '@oxfmt/*@0.45.0'
   - oxlint@1.60.0
   - '@oxlint/*@1.60.0'
+  # Renovate security update: markdown-it@14.2.0
+  - markdown-it@14.2.0
 verifyDepsBeforeRun: install
