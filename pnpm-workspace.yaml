@@ -34,4 +34,6 @@ minimumReleaseAgeExclude:
   - '@oxfmt/*@0.45.0'
   - oxlint@1.60.0
   - '@oxlint/*@1.60.0'
+  # Renovate security update: pnpm@11.5.3
+  - pnpm@11.5.3
 verifyDepsBeforeRun: install
