@@ -16,7 +16,7 @@ catalog:
   shiki: 4.0.2
   skills-ref: 0.1.5
   typescript: 6.0.2
-  vite-plus: 0.1.17
+  vite-plus: 0.1.24
   vitest: 4.1.4
 
 blockExoticSubdeps: true
@@ -27,8 +27,8 @@ minimumReleaseAgeExclude:
   - hono@4.12.14
   # vite-plus 0.1.17 patches GHSA-33r3-4whc-44c2 (path traversal). Its
   # ecosystem was republished the same day at matching versions.
-  # Remove each entry when its own age catches up.
-  - vite-plus@0.1.17
+  # Remove each entry when its own age catches up. || 0.1.24
+  - vite-plus@0.1.17 || 0.1.24
   - '@voidzero-dev/*@0.1.17'
   - oxfmt@0.45.0
   - '@oxfmt/*@0.45.0'
