@@ -18,9 +18,9 @@ Documents are named data, not processes. A file doc is keyed by its real path, s
 
 ## Stack
 
-- **Workspace**: pnpm 10 with catalog. `minimumReleaseAge: 10080` (7 days) gates new deps.
+- **Workspace**: pnpm 11 with catalog. `minimumReleaseAge: 10080` (7 days) gates new deps.
 - **Toolchain**: [vite-plus](https://viteplus.dev) (`vp`) — build (tsdown), lint/format (oxlint + oxfmt), task running.
-- **Runtime** (contributors): Node 24.14.1 via mise. The **published package** targets `node >= 20`.
+- **Runtime** (contributors): Node 24.18.0 via mise. The **published package** targets `node >= 20`.
 - **Core**: [Hono](https://hono.dev), [markdown-it](https://github.com/markdown-it/markdown-it), [Shiki](https://shiki.style), [Mermaid](https://mermaid.js.org) (loaded client-side from a pinned jsDelivr URL, gated by a strict Content-Security-Policy).
 - **Tests**: [Vitest](https://vitest.dev) — unit tests alongside their sources (`*.test.ts`), plus an e2e suite that builds and spawns the real CLI.
 
@@ -65,7 +65,7 @@ mdscroll/
 │       └── store/             # state.ts (keyed doc Map + added/updated/removed events)
 ├── pnpm-workspace.yaml        # catalog + release-age gate
 ├── vite.config.ts             # root vp config (fmt / lint / staged)
-├── mise.toml                  # Node 24.14.1, pnpm 10.33.0
+├── mise.toml                  # Node 24.18.0, pnpm 11.5.3
 └── tsconfig.json              # strict base extended by the package
 ```
 
