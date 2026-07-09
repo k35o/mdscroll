@@ -8,7 +8,6 @@ catalog:
   '@types/markdown-it': 14.1.2
   '@types/node': 24.13.2
   commander: 14.0.3
-  get-port: 7.2.0
   hono: 4.12.25
   markdown-it: 14.2.0
   markdown-it-github-alerts: 1.0.1

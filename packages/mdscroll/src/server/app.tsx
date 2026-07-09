@@ -1,15 +1,25 @@
-import { type HttpBindings, serve, type ServerType } from '@hono/node-server';
+import { stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
+import { basename, isAbsolute } from 'node:path';
+import type { HttpBindings } from '@hono/node-server';
 import { Hono } from 'hono';
 import { html } from 'hono/html';
 import { streamSSE } from 'hono/streaming';
+import {
+  MAX_DOCS_TOTAL,
+  MAX_KEY_LENGTH,
+  MAX_LABEL_LENGTH,
+  MAX_MARKDOWN_BYTES,
+} from '../constants.js';
 import { displaySourceLabel } from '../source.js';
-import { type DocPublic, Store } from '../store/state.js';
+import type { DocKind, DocPublic, Store } from '../store/state.js';
 import { CLIENT_JS, Document, STYLES_CSS } from './client.js';
 import { render } from './render.js';
+import type { Watchers } from './watcher.js';
 
 type Env = { Bindings: HttpBindings };
 
-/** The shape of the Hono app we build — exported for bind/discover. */
+/** The shape of the Hono app we build — exported for bind. */
 export type HonoApp = Hono<Env>;
 
 export type ServerHandle = {
@@ -19,107 +29,211 @@ export type ServerHandle = {
 
 type ServerMeta = { version: string };
 
-export type ServerOptions = {
-  /**
-   * The host we are listening on (for building the allowlist). `0.0.0.0`
-   * and `::` mean "any"; we treat them as "loopback-only" for the push
-   * endpoints because the user has not opted into LAN exposure. A
-   * specific non-loopback IP is taken as "same-host traffic on this
-   * interface is fine" and added to the allowlist so discovery works.
-   */
-  bindHost: string;
-};
-
 /** Payload shape sent over SSE. The client mirrors this in CLIENT_JS. */
 type DocPayload = {
-  id: string;
-  source: string;
-  displaySource: string;
+  key: string;
+  label: string;
+  display: string;
+  kind: DocKind;
+  watched: boolean;
+  stale: boolean;
   html: string;
-  ownerPid?: number;
   updatedAt: number;
 };
 
-const toPayload = async (doc: DocPublic): Promise<DocPayload> => ({
-  id: doc.id,
-  source: doc.source,
-  displaySource: displaySourceLabel(doc.source),
-  html: await render(doc.markdown),
-  ownerPid: doc.ownerPid,
+const toPayload = (doc: DocPublic): DocPayload => ({
+  key: doc.key,
+  label: doc.label,
+  display: displaySourceLabel(doc.label),
+  kind: doc.kind,
+  watched: doc.watched,
+  stale: doc.stale,
+  html: doc.html,
   updatedAt: doc.updatedAt,
 });
 
-const bearer = (header: string | undefined): string | null => {
-  if (!header) return null;
-  const match = /^Bearer\s+(.+)$/i.exec(header);
-  return match?.[1] ?? null;
-};
+const toSummary = (doc: DocPublic) => ({
+  key: doc.key,
+  label: doc.label,
+  kind: doc.kind,
+  watched: doc.watched,
+  stale: doc.stale,
+  updatedAt: doc.updatedAt,
+});
 
 /**
- * Admission caps for POST /_/docs. These are deliberately generous —
- * the usual workload is a handful of markdown files under 1 MB each —
- * but they exist so a runaway client cannot pin arbitrary memory on
- * the server, and so server.pid cannot be used as a GC-immune
- * ownerPid to hoard docs.
+ * The write surface is tokenless, so the boundary that keeps it local is
+ * this Host check, applied to EVERY route. A socket-address allowlist is
+ * not enough: a DNS-rebound page (evil.com resolving to 127.0.0.1) makes
+ * same-origin fetches that arrive FROM loopback — but its Host header
+ * still says evil.com, which is exactly what we reject here.
  */
-const MAX_MARKDOWN_BYTES = 10 * 1024 * 1024;
-const MAX_SOURCE_LENGTH = 1024;
-const MAX_DOCS_TOTAL = 128;
-const MAX_DOCS_PER_OWNER = 16;
+const ALLOWED_HOSTNAMES = new Set(['127.0.0.1', 'localhost', '[::1]']);
 
-const LOOPBACK_ADDRESSES = [
+export const hostAllowed = (hostHeader: string | undefined): boolean => {
+  if (!hostHeader) return false;
+  const value = hostHeader.trim().toLowerCase();
+  if (value.length === 0) return false;
+  const hostname = value.startsWith('[')
+    ? value.slice(0, value.indexOf(']') + 1)
+    : (value.split(':')[0] ?? '');
+  return ALLOWED_HOSTNAMES.has(hostname);
+};
+
+const LOOPBACK_ADDRESSES = new Set([
   '127.0.0.1',
   '::1',
   // IPv4-mapped IPv6 loopback that some Node configurations surface.
   '::ffff:127.0.0.1',
-] as const;
+]);
 
-const WILDCARD_HOSTS = new Set(['', '0.0.0.0', '::', '[::]']);
+// oxlint-disable-next-line no-control-regex -- rejecting control chars in keys is the point
+const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 
-/**
- * Build the set of remote socket addresses allowed to reach /_/*.
- *
- * Always includes loopback. If the server was bound to a specific
- * non-loopback IP, that IP is also included — same-host traffic reaches
- * the socket with that address as its source and we want push / probe
- * to work locally. Wildcard binds (0.0.0.0, ::) are treated as
- * "loopback-only" because the user has not expressed an intent to
- * expose push endpoints to the LAN.
- */
-const buildAllowedSources = (bindHost: string): Set<string> => {
-  const set = new Set<string>(LOOPBACK_ADDRESSES);
-  const normalized = bindHost.trim().toLowerCase();
-  if (!WILDCARD_HOSTS.has(normalized) && bindHost !== '') {
-    set.add(bindHost);
-  }
-  return set;
+export type RegisterInput = {
+  key: string;
+  label?: string | undefined;
+  path?: string | undefined;
+  watch?: boolean | undefined;
+  markdown?: string | undefined;
 };
 
-export const createApp = (store: Store, meta: ServerMeta, options: ServerOptions): Hono<Env> => {
-  const app = new Hono<Env>();
-  const allowedSources = buildAllowedSources(options.bindHost);
+export type RegisterResult =
+  | { ok: true; created: boolean; doc: DocPublic }
+  | { ok: false; status: 400 | 413 | 422 | 429; error: string };
 
-  // The push surface is a per-doc capability (random token returned on
-  // POST) plus an IP allowlist. The token alone is not a credential —
-  // anyone who can reach the port and is allowed by this middleware can
-  // POST to get one. We therefore gate /_/* on the remote socket's
-  // address so that binding --host 0.0.0.0 doesn't silently expose the
-  // push endpoints to the LAN.
-  app.use('/_/*', async (c, next) => {
-    // `c.env.incoming` is only set by @hono/node-server. Synthetic
-    // in-process requests (e.g. `app.request()` in tests) have no
-    // network origin at all — `c.env` itself is undefined there — so
-    // there is nothing to deny.
-    const remote = c.env?.incoming?.socket?.remoteAddress;
-    if (remote !== undefined && !allowedSources.has(remote)) {
+/**
+ * The single doc-creation path. Both the HTTP PUT route and the server
+ * process's own doc (in auto-serve) go through here — there is no
+ * privileged registration.
+ *
+ * Transactional: every validation and the file read run BEFORE any
+ * watcher or store mutation, so a rejected request leaves the existing
+ * doc (and its watcher) exactly as it was — a bad replace can never strip
+ * the live doc's watcher. Body markdown, when provided, is the fallback
+ * content for a path the server cannot read (created stale, not rejected).
+ */
+export const registerDoc = async (
+  store: Store,
+  watchers: Watchers,
+  input: RegisterInput,
+): Promise<RegisterResult> => {
+  const key = input.key;
+  if (key.length === 0 || key.length > MAX_KEY_LENGTH || CONTROL_CHARS.test(key)) {
+    return { ok: false, status: 400, error: 'invalid key' };
+  }
+  if (input.label !== undefined && input.label.length > MAX_LABEL_LENGTH) {
+    return { ok: false, status: 413, error: `label exceeds ${MAX_LABEL_LENGTH} characters` };
+  }
+  if (
+    input.markdown !== undefined &&
+    Buffer.byteLength(input.markdown, 'utf-8') > MAX_MARKDOWN_BYTES
+  ) {
+    return { ok: false, status: 413, error: `markdown exceeds ${MAX_MARKDOWN_BYTES} bytes` };
+  }
+  if (!store.get(key) && store.size() >= MAX_DOCS_TOTAL) {
+    return { ok: false, status: 429, error: 'too many docs on the server' };
+  }
+
+  const kind: DocKind = input.path !== undefined ? 'file' : 'static';
+  let markdown = input.markdown;
+  let stale = false;
+  let watched = false;
+
+  if (input.path !== undefined) {
+    const path = input.path;
+    if (!isAbsolute(path)) {
+      return { ok: false, status: 400, error: 'path must be absolute' };
+    }
+    const st = await stat(path).catch(() => null);
+    if (st && !st.isFile()) {
+      return { ok: false, status: 400, error: 'path is not a regular file' };
+    }
+    if (st && st.size > MAX_MARKDOWN_BYTES) {
+      return { ok: false, status: 413, error: `file exceeds ${MAX_MARKDOWN_BYTES} bytes` };
+    }
+    try {
+      const read = await readFile(path, 'utf-8');
+      if (Buffer.byteLength(read, 'utf-8') > MAX_MARKDOWN_BYTES) {
+        return { ok: false, status: 413, error: `file exceeds ${MAX_MARKDOWN_BYTES} bytes` };
+      }
+      markdown = read;
+    } catch {
+      if (markdown === undefined) {
+        return { ok: false, status: 422, error: `cannot read ${path} and no markdown provided` };
+      }
+      stale = true;
+    }
+    // Past every reject. Commit the watcher: attach() swaps any existing
+    // one atomically; a failed attach (missing parent dir) leaves the doc
+    // as a static snapshot, so it is stale.
+    if (input.watch !== false) {
+      watched = watchers.attach(key, path);
+      if (!watched) stale = true;
+    } else {
+      watchers.detach(key);
+    }
+  } else {
+    if (markdown === undefined) {
+      return { ok: false, status: 400, error: 'markdown is required for static docs' };
+    }
+    // A static doc replacing a former watched file drops its watcher.
+    watchers.detach(key);
+  }
+
+  const label =
+    input.label !== undefined && input.label.length > 0
+      ? input.label
+      : input.path !== undefined
+        ? basename(input.path)
+        : key;
+
+  const rendered = await render(markdown ?? '');
+  const { doc, created } = store.upsert({
+    key,
+    label,
+    kind,
+    path: input.path,
+    watched,
+    stale,
+    markdown: markdown ?? '',
+    html: rendered,
+  });
+  return { ok: true, created, doc };
+};
+
+export const createApp = (store: Store, watchers: Watchers, meta: ServerMeta): HonoApp => {
+  const app = new Hono<Env>();
+
+  app.use('*', async (c, next) => {
+    // Synthetic in-process requests (app.request() in tests) carry no
+    // Host header; fall back to the request URL's host, which for real
+    // node-server traffic is itself derived from the Host header.
+    const host = c.req.header('host') ?? new URL(c.req.url).host;
+    if (!hostAllowed(host)) {
       return c.json({ error: 'loopback only' }, 403);
     }
-    await next();
+    return next();
   });
 
+  // Defense in depth behind the Host gate: the write surface also
+  // requires the TCP peer itself to be loopback. The bind is loopback
+  // -only today, so this is redundant until someone changes the bind.
+  app.use('/_/*', async (c, next) => {
+    const remote = c.env?.incoming?.socket?.remoteAddress;
+    if (remote !== undefined && !LOOPBACK_ADDRESSES.has(remote)) {
+      return c.json({ error: 'loopback only' }, 403);
+    }
+    return next();
+  });
+
+  // The mermaid source is path-scoped to the pinned version so the CSP
+  // does not admit arbitrary jsdelivr packages. (Dynamic import() cannot
+  // carry SRI; bundling mermaid would remove the CDN trust entirely at
+  // the cost of package size.)
   const CSP = [
     "default-src 'self'",
-    "script-src 'self' https://cdn.jsdelivr.net",
+    "script-src 'self' https://cdn.jsdelivr.net/npm/mermaid@11.14.0/",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self'",
@@ -148,91 +262,56 @@ export const createApp = (store: Store, meta: ServerMeta, options: ServerOptions
     return c.body(CLIENT_JS);
   });
 
-  // Discovery: clients use this to confirm "the process on :4977 is
-  // another mdscroll I can push to" before POSTing their document.
+  // Discovery probe. Answered before renderer warmup completes — no
+  // route on this surface renders — so a warming server is never
+  // misclassified as a squatter.
   app.get('/_/health', (c) => {
-    return c.json({ agent: 'mdscroll', version: meta.version, pid: process.pid });
-  });
-
-  app.post('/_/docs', async (c) => {
-    const body = await c.req.json().catch(() => null);
-    if (!body || typeof body.markdown !== 'string' || typeof body.source !== 'string') {
-      return c.json({ error: 'markdown and source are required strings' }, 400);
-    }
-    if (body.source.length > MAX_SOURCE_LENGTH) {
-      return c.json({ error: `source exceeds ${MAX_SOURCE_LENGTH}-character limit` }, 413);
-    }
-    if (Buffer.byteLength(body.markdown, 'utf-8') > MAX_MARKDOWN_BYTES) {
-      return c.json({ error: `markdown exceeds ${MAX_MARKDOWN_BYTES}-byte limit` }, 413);
-    }
-    // Require a positive safe integer that is NOT the server's own pid.
-    // Accepting `process.pid` as ownerPid would exempt the doc from
-    // liveness GC (since the server always skips its own pid), giving
-    // an attacker a trivial way to pin zombies in memory.
-    const rawOwnerPid = body.ownerPid;
-    const ownerPid =
-      typeof rawOwnerPid === 'number' &&
-      Number.isSafeInteger(rawOwnerPid) &&
-      rawOwnerPid > 0 &&
-      rawOwnerPid !== process.pid
-        ? rawOwnerPid
-        : undefined;
-    const instanceId =
-      typeof body.instanceId === 'string' && body.instanceId.length > 0
-        ? body.instanceId
-        : undefined;
-    // Admission caps. The total cap keeps a lone client from filling
-    // memory; the per-owner cap keeps a misbehaving client from
-    // monopolising the tab strip. An upsert on a known instanceId
-    // doesn't count as a new doc — skip the cap check in that case.
-    const isUpsert = instanceId !== undefined && store.hasInstance(instanceId);
-    if (!isUpsert) {
-      if (store.size() >= MAX_DOCS_TOTAL) {
-        return c.json({ error: 'too many docs on the server' }, 429);
-      }
-      if (ownerPid !== undefined && store.countByOwnerPid(ownerPid) >= MAX_DOCS_PER_OWNER) {
-        return c.json({ error: `owner ${ownerPid} exceeds ${MAX_DOCS_PER_OWNER}-doc limit` }, 429);
-      }
-    }
-    const { doc, token } = store.add({
-      source: body.source,
-      markdown: body.markdown,
-      ownerPid,
-      instanceId,
+    return c.json({
+      agent: 'mdscroll',
+      version: meta.version,
+      pid: process.pid,
+      docs: store.size(),
     });
-    return c.json({ id: doc.id, token }, 201);
   });
 
-  app.put('/_/docs/:id', async (c) => {
-    const id = c.req.param('id');
-    // Existence check comes before auth so clients can tell "server
-    // forgot this id (e.g. it was restarted)" from "token mismatch".
-    // Doc ids are randomUUID — unguessable — so returning 404 on
-    // unknown id does not meaningfully expand an attacker's surface.
-    if (!store.get(id)) return c.json({ error: 'not found' }, 404);
-    const token = bearer(c.req.header('authorization'));
-    if (!token || !store.authorize(id, token)) {
-      return c.json({ error: 'unauthorized' }, 401);
-    }
-    const body = await c.req.json().catch(() => null);
-    if (!body) return c.json({ error: 'body required' }, 400);
-    const patch: { source?: string; markdown?: string } = {};
-    if (typeof body.source === 'string') patch.source = body.source;
-    if (typeof body.markdown === 'string') patch.markdown = body.markdown;
-    const next = store.update(id, patch);
-    if (!next) return c.json({ error: 'not found' }, 404);
-    return c.body(null, 204);
+  app.get('/_/docs', (c) => {
+    return c.json({ docs: store.list().map(toSummary) });
   });
 
-  app.delete('/_/docs/:id', (c) => {
-    const id = c.req.param('id');
-    if (!store.get(id)) return c.json({ error: 'not found' }, 404);
-    const token = bearer(c.req.header('authorization'));
-    if (!token || !store.authorize(id, token)) {
-      return c.json({ error: 'unauthorized' }, 401);
+  app.put('/_/docs/:key', async (c) => {
+    const key = c.req.param('key');
+    const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body || typeof body !== 'object') {
+      return c.json({ error: 'JSON body required' }, 400);
     }
-    const removed = store.remove(id);
-    if (!removed) return c.json({ error: 'not found' }, 404);
+    if (body.markdown !== undefined && typeof body.markdown !== 'string') {
+      return c.json({ error: 'markdown must be a string' }, 400);
+    }
+    if (body.path !== undefined && typeof body.path !== 'string') {
+      return c.json({ error: 'path must be a string' }, 400);
+    }
+    if (body.watch !== undefined && typeof body.watch !== 'boolean') {
+      return c.json({ error: 'watch must be a boolean' }, 400);
+    }
+    if (body.label !== undefined && typeof body.label !== 'string') {
+      return c.json({ error: 'label must be a string' }, 400);
+    }
+    const result = await registerDoc(store, watchers, {
+      key,
+      markdown: body.markdown as string | undefined,
+      path: body.path as string | undefined,
+      watch: body.watch as boolean | undefined,
+      label: body.label as string | undefined,
+    });
+    if (!result.ok) return c.json({ error: result.error }, result.status);
+    return c.json({ key, created: result.created }, result.created ? 201 : 200);
+  });
+
+  app.delete('/_/docs/:key', (c) => {
+    const key = c.req.param('key');
+    watchers.detach(key);
+    store.remove(key);
+    // Idempotent: deleting an absent doc is success, not an error.
     return c.body(null, 204);
   });
 
@@ -240,16 +319,14 @@ export const createApp = (store: Store, meta: ServerMeta, options: ServerOptions
     return streamSSE(c, async (stream) => {
       let aborted = false;
 
-      // Single write chain. All writes — init and every subsequent event —
-      // go through here so they reach the socket in arrival order even
-      // when render() latencies differ.
+      // Single write chain: init and every subsequent event go through
+      // here so they reach the socket in arrival order. HTML is cached
+      // on the doc record, so no render happens on this path.
       let writes: Promise<void> = Promise.resolve();
-      const enqueue = (build: () => Promise<{ event: string; data: string }>) => {
+      const enqueue = (msg: { event: string; data: string }) => {
         writes = writes.then(async () => {
           if (aborted) return;
           try {
-            const msg = await build();
-            if (aborted) return;
             await stream.writeSSE(msg);
           } catch (err) {
             process.stderr.write(`mdscroll: SSE write failed: ${String(err)}\n`);
@@ -257,32 +334,25 @@ export const createApp = (store: Store, meta: ServerMeta, options: ServerOptions
         });
       };
 
-      // Subscribe BEFORE snapshotting so any store mutation that races
-      // with init is buffered instead of lost. The subscription feeds
-      // straight into the same write chain — `init` was the first thing
-      // enqueued so it lands first.
+      // Subscribe BEFORE snapshotting so a store mutation racing with
+      // init is buffered instead of lost; init was enqueued first so it
+      // still lands first.
       const unsubscribe = store.subscribe((event) => {
         if (aborted) return;
         if (event.kind === 'removed') {
-          enqueue(async () => ({
-            event: 'removed',
-            data: JSON.stringify({ id: event.id }),
-          }));
+          enqueue({ event: 'removed', data: JSON.stringify({ key: event.key }) });
         } else {
-          enqueue(async () => ({
+          enqueue({
             event: event.kind,
-            data: JSON.stringify({ doc: await toPayload(event.doc) }),
-          }));
+            data: JSON.stringify({ doc: toPayload(event.doc) }),
+          });
         }
       });
 
-      const snapshot = store.list();
-      enqueue(async () => ({
+      enqueue({
         event: 'init',
-        data: JSON.stringify({
-          docs: await Promise.all(snapshot.map(toPayload)),
-        }),
-      }));
+        data: JSON.stringify({ docs: store.list().map(toPayload) }),
+      });
 
       await new Promise<void>((resolve) => {
         stream.onAbort(() => {
@@ -295,31 +365,4 @@ export const createApp = (store: Store, meta: ServerMeta, options: ServerOptions
   });
 
   return app;
-};
-
-export const startServer = async (opts: {
-  port: number;
-  host: string;
-  store: Store;
-  meta: ServerMeta;
-}): Promise<ServerHandle> => {
-  const app = createApp(opts.store, opts.meta, { bindHost: opts.host });
-
-  const server: ServerType = serve({
-    fetch: app.fetch,
-    port: opts.port,
-    hostname: opts.host,
-  });
-
-  const url = `http://${opts.host}:${opts.port}`;
-
-  const close = () =>
-    new Promise<void>((resolve, reject) => {
-      server.close((err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-
-  return { url, close };
 };

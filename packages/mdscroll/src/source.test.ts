@@ -34,6 +34,18 @@ describe('fileSourceLabel', () => {
   it('falls back to the basename when the path resolves exactly to cwd', () => {
     expect(fileSourceLabel('.')).toBe(dir.split('/').pop());
   });
+
+  it('falls back to the basename for a relative path outside cwd', () => {
+    expect(fileSourceLabel('../outside.md')).toBe('outside.md');
+  });
+
+  it('falls back to the basename for a deep parent chain outside cwd', () => {
+    expect(fileSourceLabel('../../nested/dir/notes.md')).toBe('notes.md');
+  });
+
+  it('falls back to the basename for an absolute path outside cwd', () => {
+    expect(fileSourceLabel('/somewhere/else/report.md')).toBe('report.md');
+  });
 });
 
 describe('stdinSourceLabel', () => {
@@ -59,6 +71,15 @@ describe('stdinSourceLabel', () => {
 
   it('does not treat ## or deeper headings as H1', () => {
     expect(stdinSourceLabel('## h2\n### h3')).toBe(UNTITLED);
+  });
+
+  it('ignores # comment lines inside a fenced code block', () => {
+    const md = '```bash\n# install deps\nnpm i\n```\n\n# Release Plan\n';
+    expect(stdinSourceLabel(md)).toBe('Release Plan');
+  });
+
+  it('falls back to UNTITLED when the only # line is inside a fence', () => {
+    expect(stdinSourceLabel('```sh\n# not a heading\n```\n')).toBe(UNTITLED);
   });
 });
 

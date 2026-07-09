@@ -24,9 +24,6 @@ catalogs:
     commander:
       specifier: 14.0.3
       version: 14.0.3
-    get-port:
-      specifier: 7.2.0
-      version: 7.2.0
     hono:
       specifier: 4.12.25
       version: 4.12.25
@@ -86,9 +83,6 @@ importers:
       commander:
         specifier: 'catalog:'
         version: 14.0.3
-      get-port:
-        specifier: 'catalog:'
-        version: 7.2.0
       hono:
         specifier: 'catalog:'
         version: 4.12.25
@@ -1032,10 +1026,6 @@ packages:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
-
-  get-port@7.2.0:
-    resolution: {integrity: sha512-afP4W205ONCuMoPBqcR6PSXnzX35KTcJygfJfcp+QY+uwm3p20p1YczWXhlICIzGMCxYBQcySEcOgsJcrkyobg==}
-    engines: {node: '>=16'}
 
   glob-parent@5.1.2:
     resolution: {integrity: sha512-AOIgSQCepiJYwP3ARnGx+5VnTu2HBYdzbGP45eLw1vr3zB3vZLeyed1sC9hnbcOc9/SrMyM5RPQrkGz4aS9Zow==}
@@ -2419,8 +2409,6 @@ snapshots:
 
   fsevents@2.3.3:
     optional: true
-
-  get-port@7.2.0: {}
 
   glob-parent@5.1.2:
     dependencies:

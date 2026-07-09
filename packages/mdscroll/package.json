@@ -46,7 +46,6 @@
   "dependencies": {
     "@hono/node-server": "catalog:",
     "commander": "catalog:",
-    "get-port": "catalog:",
     "hono": "catalog:",
     "markdown-it": "catalog:",
     "markdown-it-github-alerts": "catalog:",

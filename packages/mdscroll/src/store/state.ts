@@ -1,169 +1,140 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+export type DocKind = 'file' | 'static';
 
 /** Internal doc shape. Never returned from the Store — see DocPublic. */
 type Doc = {
-  id: string;
-  source: string;
+  key: string;
+  label: string;
+  kind: DocKind;
+  path?: string;
+  watched: boolean;
+  stale: boolean;
   markdown: string;
+  html: string;
   createdAt: number;
   updatedAt: number;
-  ownerPid?: number;
-  /** Stable per-client identifier for POST idempotency. Never exposed. */
-  instanceId?: string;
 };
 
 /**
- * Public view of a Doc. Declared via `Pick` (rather than aliasing `Doc`)
- * so future private fields on `Doc` cannot accidentally leak to SSE,
- * HTTP responses, or external callers — they must be picked in
- * explicitly.
+ * Public view of a Doc. Declared via explicit copy (rather than aliasing
+ * `Doc`) so future private fields cannot accidentally leak to SSE, HTTP
+ * responses, or external callers — they must be picked in explicitly.
  */
 export type DocPublic = Pick<
   Doc,
-  'id' | 'source' | 'markdown' | 'createdAt' | 'updatedAt' | 'ownerPid'
+  | 'key'
+  | 'label'
+  | 'kind'
+  | 'path'
+  | 'watched'
+  | 'stale'
+  | 'markdown'
+  | 'html'
+  | 'createdAt'
+  | 'updatedAt'
 >;
 
 const toPublic = (doc: Doc): DocPublic => ({
-  id: doc.id,
-  source: doc.source,
+  key: doc.key,
+  label: doc.label,
+  kind: doc.kind,
+  path: doc.path,
+  watched: doc.watched,
+  stale: doc.stale,
   markdown: doc.markdown,
+  html: doc.html,
   createdAt: doc.createdAt,
   updatedAt: doc.updatedAt,
-  ownerPid: doc.ownerPid,
 });
 
 export type StoreEvent =
   | { kind: 'added'; doc: DocPublic }
   | { kind: 'updated'; doc: DocPublic }
-  | { kind: 'removed'; id: string };
+  | { kind: 'removed'; key: string };
 
 export type Listener = (event: StoreEvent) => void;
 
-export type AddInput = {
-  source: string;
+export type UpsertInput = {
+  key: string;
+  label: string;
+  kind: DocKind;
+  path?: string | undefined;
+  watched: boolean;
+  stale: boolean;
   markdown: string;
-  ownerPid?: number;
-  /**
-   * Idempotency key. If the store already has a doc with this
-   * instanceId, the existing doc is upserted (source/markdown
-   * updated, same id, fresh token) instead of creating a new one.
-   */
-  instanceId?: string;
+  html: string;
 };
 
-export type UpdateInput = Partial<Pick<Doc, 'source' | 'markdown'>>;
+export type UpdatePatch = Partial<Pick<Doc, 'label' | 'markdown' | 'html' | 'stale' | 'watched'>>;
 
+/**
+ * The multi-doc store. Identity is the caller-provided key (realpath for
+ * file docs, a name for stdin docs) — there are no random ids, no
+ * tokens, and no owners. Same-key writes replace; that is the intended
+ * upsert semantics, not an accident to be refereed.
+ */
 export class Store {
   private docs = new Map<string, Doc>();
-  private tokens = new Map<string, string>();
-  private byInstance = new Map<string, string>();
   private listeners = new Set<Listener>();
 
   list(): DocPublic[] {
     return Array.from(this.docs.values(), toPublic);
   }
 
-  get(id: string): DocPublic | null {
-    const doc = this.docs.get(id);
+  get(key: string): DocPublic | null {
+    const doc = this.docs.get(key);
     return doc ? toPublic(doc) : null;
   }
 
-  /** True when the supplied token matches the one minted for `id`. */
-  authorize(id: string, token: string): boolean {
-    const real = this.tokens.get(id);
-    return real !== undefined && real === token;
-  }
-
-  /** Number of docs in the store — used to enforce admission caps. */
   size(): number {
     return this.docs.size;
   }
 
-  /** True when an instanceId is already registered. */
-  hasInstance(instanceId: string): boolean {
-    return this.byInstance.has(instanceId);
-  }
-
-  /** Number of docs currently owned by `pid`. */
-  countByOwnerPid(pid: number): number {
-    let n = 0;
-    for (const doc of this.docs.values()) {
-      if (doc.ownerPid === pid) n += 1;
-    }
-    return n;
-  }
-
-  add(input: AddInput): { doc: DocPublic; token: string } {
-    // Idempotent path: a repeat POST from the same client instance
-    // refreshes the existing doc in place. This covers timeouts /
-    // network hiccups where the client never saw the first POST's
-    // response — without it, the client would retry and leak a
-    // duplicate doc on every such transient failure.
-    if (input.instanceId) {
-      const existingId = this.byInstance.get(input.instanceId);
-      if (existingId) {
-        const existing = this.docs.get(existingId);
-        if (existing) {
-          const now = Date.now();
-          const next: Doc = {
-            ...existing,
-            source: input.source,
-            markdown: input.markdown,
-            ownerPid: input.ownerPid,
-            updatedAt: now,
-          };
-          this.docs.set(existingId, next);
-          const token = randomBytes(16).toString('hex');
-          this.tokens.set(existingId, token);
-          const pub = toPublic(next);
-          // Emit as `updated` — listeners already know this doc.
-          this.emit({ kind: 'updated', doc: pub });
-          return { doc: pub, token };
-        }
-      }
-    }
-
-    const id = randomUUID();
-    const token = randomBytes(16).toString('hex');
+  /** Create-or-replace by key. Emits `added` on create, `updated` on replace. */
+  upsert(input: UpsertInput): { doc: DocPublic; created: boolean } {
+    const existing = this.docs.get(input.key);
     const now = Date.now();
     const doc: Doc = {
-      id,
-      source: input.source,
+      key: input.key,
+      label: input.label,
+      kind: input.kind,
+      ...(input.path !== undefined ? { path: input.path } : {}),
+      watched: input.watched,
+      stale: input.stale,
       markdown: input.markdown,
-      createdAt: now,
+      html: input.html,
+      createdAt: existing?.createdAt ?? now,
       updatedAt: now,
-      ownerPid: input.ownerPid,
-      instanceId: input.instanceId,
     };
-    this.docs.set(id, doc);
-    this.tokens.set(id, token);
-    if (input.instanceId) this.byInstance.set(input.instanceId, id);
+    this.docs.set(input.key, doc);
     const pub = toPublic(doc);
-    this.emit({ kind: 'added', doc: pub });
-    return { doc: pub, token };
+    this.emit(existing ? { kind: 'updated', doc: pub } : { kind: 'added', doc: pub });
+    return { doc: pub, created: !existing };
   }
 
-  update(id: string, input: UpdateInput): DocPublic | null {
-    const current = this.docs.get(id);
+  /**
+   * Patch an existing doc. Returns null (and emits nothing) when the key
+   * is absent — this is the write path for internal watcher updates, and
+   * it must never create: only an external PUT may resurrect a doc the
+   * user closed.
+   */
+  updateIfPresent(key: string, patch: UpdatePatch): DocPublic | null {
+    const current = this.docs.get(key);
     if (!current) return null;
     const next: Doc = {
       ...current,
-      ...input,
+      ...patch,
       updatedAt: Date.now(),
     };
-    this.docs.set(id, next);
+    this.docs.set(key, next);
     const pub = toPublic(next);
     this.emit({ kind: 'updated', doc: pub });
     return pub;
   }
 
-  remove(id: string): boolean {
-    const doc = this.docs.get(id);
-    if (!doc) return false;
-    this.docs.delete(id);
-    this.tokens.delete(id);
-    if (doc.instanceId) this.byInstance.delete(doc.instanceId);
-    this.emit({ kind: 'removed', id });
+  remove(key: string): boolean {
+    if (!this.docs.has(key)) return false;
+    this.docs.delete(key);
+    this.emit({ kind: 'removed', key });
     return true;
   }
 
