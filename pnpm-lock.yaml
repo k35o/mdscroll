@@ -13,8 +13,8 @@ catalogs:
       specifier: 2.31.0
       version: 2.31.0
     '@hono/node-server':
-      specifier: 2.0.6
-      version: 2.0.6
+      specifier: 2.0.8
+      version: 2.0.8
     '@types/markdown-it':
       specifier: 14.1.2
       version: 14.1.2
@@ -25,8 +25,8 @@ catalogs:
       specifier: 14.0.3
       version: 14.0.3
     hono:
-      specifier: 4.12.25
-      version: 4.12.25
+      specifier: 4.12.27
+      version: 4.12.27
     markdown-it:
       specifier: 14.2.0
       version: 14.2.0
@@ -79,13 +79,13 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 'catalog:'
-        version: 2.0.6(hono@4.12.25)
+        version: 2.0.8(hono@4.12.27)
       commander:
         specifier: 'catalog:'
         version: 14.0.3
       hono:
         specifier: 'catalog:'
-        version: 4.12.25
+        version: 4.12.27
       markdown-it:
         specifier: 'catalog:'
         version: 14.2.0
@@ -202,8 +202,8 @@ packages:
   '@emnapi/wasi-threads@1.2.1':
     resolution: {integrity: sha512-uTII7OYF+/Mes/MrcIOYp5yOtSMLBWSIoLPpcgwipoiKbli6k322tcoFsxoIIxPDqW01SQGAgko4EzZi2BNv2w==}
 
-  '@hono/node-server@2.0.6':
-    resolution: {integrity: sha512-7DeRlKG57JDBNZ5Qj2jwVdgwQy4b0tLubRLl3zCf91/rCf9i7p1V5FtW/yWibm1uUHE493ts9ZXH/7g/LQWl+g==}
+  '@hono/node-server@2.0.8':
+    resolution: {integrity: sha512-GuCWzLxwg218fy1JaHculFsdcuY12hxit83V+algozTPnwhNjLrRL/Alg9OYjLZLoUZ1rw/S4CdTMsnkSKCmFA==}
     engines: {node: '>=20'}
     peerDependencies:
       hono: ^4
@@ -1054,8 +1054,8 @@ packages:
   hast-util-whitespace@3.0.0:
     resolution: {integrity: sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw==}
 
-  hono@4.12.25:
-    resolution: {integrity: sha512-2NFaIyNVgJmBs/ecmtGzlmluTFs5cHEWGTdu0t1HBwYzoGXOL5nUQBRMXsXWla5i4KkG//QMzVP88m1+I3fdAQ==}
+  hono@4.12.27:
+    resolution: {integrity: sha512-1yrb/+w6HWQJrUCLkJ2IF5jNIPvvFkblV5RNOYl6bV+OA6p9GLcMpHFFGTosSvHvcAUibuUukRqhlYI4z32C7Q==}
     engines: {node: '>=16.9.0'}
 
   html-void-elements@3.0.0:
@@ -1883,9 +1883,9 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@hono/node-server@2.0.6(hono@4.12.25)':
+  '@hono/node-server@2.0.8(hono@4.12.27)':
     dependencies:
-      hono: 4.12.25
+      hono: 4.12.27
 
   '@inquirer/external-editor@1.0.3(@types/node@24.13.2)':
     dependencies:
@@ -2493,7 +2493,7 @@ snapshots:
     dependencies:
       '@types/hast': 3.0.4
 
-  hono@4.12.25: {}
+  hono@4.12.27: {}
 
   html-void-elements@3.0.0: {}
 
