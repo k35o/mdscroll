@@ -1,167 +1,238 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { StoreEvent, UpsertInput } from './state.js';
 import { Store } from './state.js';
 
-describe('Store', () => {
-  describe('initial state', () => {
-    it('lists no docs', () => {
-      expect(new Store().list()).toEqual([]);
-    });
+const makeInput = (overrides: Partial<UpsertInput> = {}): UpsertInput => ({
+  key: '/docs/plan.md',
+  label: 'plan.md',
+  kind: 'file',
+  path: '/docs/plan.md',
+  watched: true,
+  stale: false,
+  markdown: '# plan',
+  html: '<h1>plan</h1>',
+  ...overrides,
+});
+
+const capture = (store: Store): StoreEvent[] => {
+  const events: StoreEvent[] = [];
+  store.subscribe((event) => events.push(event));
+  return events;
+};
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+describe('upsert', () => {
+  it('creates a doc and reports created: true for a new key', () => {
+    const store = new Store();
+
+    const { doc, created } = store.upsert(makeInput());
+
+    expect(created).toBe(true);
+    expect(doc.key).toBe('/docs/plan.md');
+    expect(doc.markdown).toBe('# plan');
+    expect(store.get('/docs/plan.md')?.html).toBe('<h1>plan</h1>');
   });
 
-  describe('add', () => {
-    it('returns a doc with a generated id and a write token', () => {
-      const store = new Store();
-      const { doc, token } = store.add({ source: 'plan.md', markdown: '# hi' });
-      expect(doc.id).toMatch(/[0-9a-f-]{36}/);
-      expect(doc.source).toBe('plan.md');
-      expect(doc.markdown).toBe('# hi');
-      expect(token.length).toBeGreaterThanOrEqual(16);
-    });
+  it('emits added when the key is new', () => {
+    const store = new Store();
+    const events = capture(store);
 
-    it('retains each added doc in insertion order', () => {
-      const store = new Store();
-      store.add({ source: 'a', markdown: '1' });
-      store.add({ source: 'b', markdown: '2' });
-      expect(store.list().map((d) => d.source)).toEqual(['a', 'b']);
-    });
+    store.upsert(makeInput());
 
-    it('records ownerPid when provided', () => {
-      const store = new Store();
-      const { doc } = store.add({ source: 's', markdown: 'x', ownerPid: 4242 });
-      expect(doc.ownerPid).toBe(4242);
-    });
+    expect(events).toEqual([
+      { kind: 'added', doc: expect.objectContaining({ key: '/docs/plan.md' }) },
+    ]);
   });
 
-  describe('authorize', () => {
-    it('accepts the token returned by add', () => {
-      const store = new Store();
-      const { doc, token } = store.add({ source: 's', markdown: 'x' });
-      expect(store.authorize(doc.id, token)).toBe(true);
-    });
+  it('replaces the doc and reports created: false for an existing key', () => {
+    const store = new Store();
+    store.upsert(makeInput());
 
-    it('rejects a mismatched token', () => {
-      const store = new Store();
-      const { doc } = store.add({ source: 's', markdown: 'x' });
-      expect(store.authorize(doc.id, 'nope')).toBe(false);
-    });
+    const { doc, created } = store.upsert(makeInput({ markdown: 'v2', html: '<p>v2</p>' }));
 
-    it('rejects an unknown id', () => {
-      expect(new Store().authorize('no-such-id', 'whatever')).toBe(false);
-    });
+    expect(created).toBe(false);
+    expect(doc.markdown).toBe('v2');
+    expect(store.get('/docs/plan.md')?.html).toBe('<p>v2</p>');
+    expect(store.size()).toBe(1);
   });
 
-  describe('update', () => {
-    it('applies partial updates and bumps updatedAt', async () => {
-      const store = new Store();
-      const { doc } = store.add({ source: 's', markdown: 'x' });
-      // Force updatedAt to differ.
-      await new Promise((r) => setTimeout(r, 2));
-      const next = store.update(doc.id, { markdown: 'y' });
-      expect(next?.markdown).toBe('y');
-      expect(next?.source).toBe('s');
-      expect((next?.updatedAt ?? 0) > doc.updatedAt).toBe(true);
-    });
+  it('emits updated when the key already exists', () => {
+    const store = new Store();
+    store.upsert(makeInput());
+    const events = capture(store);
 
-    it('returns null for an unknown id', () => {
-      expect(new Store().update('missing', { markdown: 'x' })).toBeNull();
-    });
+    store.upsert(makeInput({ markdown: 'v2' }));
+
+    expect(events).toEqual([{ kind: 'updated', doc: expect.objectContaining({ markdown: 'v2' }) }]);
   });
 
-  describe('remove', () => {
-    it('removes the doc and invalidates its token', () => {
-      const store = new Store();
-      const { doc, token } = store.add({ source: 's', markdown: 'x' });
-      expect(store.remove(doc.id)).toBe(true);
-      expect(store.get(doc.id)).toBeNull();
-      expect(store.authorize(doc.id, token)).toBe(false);
-    });
+  it('preserves createdAt and refreshes updatedAt on replace', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const store = new Store();
+    store.upsert(makeInput());
 
-    it('returns false for an unknown id', () => {
-      expect(new Store().remove('missing')).toBe(false);
-    });
+    vi.setSystemTime(6_000);
+    const { doc } = store.upsert(makeInput({ markdown: 'v2' }));
+
+    expect(doc.createdAt).toBe(1_000);
+    expect(doc.updatedAt).toBe(6_000);
+  });
+});
+
+describe('updateIfPresent', () => {
+  it('applies the patch and keeps unpatched fields', () => {
+    const store = new Store();
+    store.upsert(makeInput());
+
+    const doc = store.updateIfPresent('/docs/plan.md', { markdown: 'v2', stale: true });
+
+    expect(doc?.markdown).toBe('v2');
+    expect(doc?.stale).toBe(true);
+    expect(doc?.label).toBe('plan.md');
+    expect(store.get('/docs/plan.md')?.markdown).toBe('v2');
   });
 
-  describe('idempotency via instanceId', () => {
-    it('upserts the existing doc when add() is called with the same instanceId', () => {
-      const store = new Store();
-      const first = store.add({ source: 's', markdown: 'x', instanceId: 'abc' });
-      const second = store.add({ source: 's2', markdown: 'y', instanceId: 'abc' });
-      expect(second.doc.id).toBe(first.doc.id);
-      expect(store.list()).toHaveLength(1);
-      expect(store.get(first.doc.id)?.markdown).toBe('y');
-      expect(store.get(first.doc.id)?.source).toBe('s2');
-    });
+  it('refreshes updatedAt without touching createdAt', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const store = new Store();
+    store.upsert(makeInput());
 
-    it('rotates the token on idempotent upsert', () => {
-      const store = new Store();
-      const first = store.add({ source: 's', markdown: 'x', instanceId: 'abc' });
-      const second = store.add({ source: 's', markdown: 'y', instanceId: 'abc' });
-      expect(second.token).not.toBe(first.token);
-      expect(store.authorize(first.doc.id, first.token)).toBe(false);
-      expect(store.authorize(second.doc.id, second.token)).toBe(true);
-    });
+    vi.setSystemTime(6_000);
+    const doc = store.updateIfPresent('/docs/plan.md', { markdown: 'v2' });
 
-    it('emits an updated event (not added) on idempotent upsert', () => {
-      const store = new Store();
-      const listener = vi.fn();
-      store.add({ source: 's', markdown: 'x', instanceId: 'abc' });
-      store.subscribe(listener);
-      store.add({ source: 's', markdown: 'y', instanceId: 'abc' });
-      expect(listener.mock.calls.map((c) => c[0].kind)).toEqual(['updated']);
-    });
-
-    it('frees the instanceId when the doc is removed, allowing a fresh id next time', () => {
-      const store = new Store();
-      const first = store.add({ source: 's', markdown: 'x', instanceId: 'abc' });
-      store.remove(first.doc.id);
-      const second = store.add({ source: 's', markdown: 'x', instanceId: 'abc' });
-      expect(second.doc.id).not.toBe(first.doc.id);
-    });
+    expect(doc?.createdAt).toBe(1_000);
+    expect(doc?.updatedAt).toBe(6_000);
   });
 
-  describe('size / countByOwnerPid / hasInstance', () => {
-    it('tracks size and per-owner counts', () => {
-      const store = new Store();
-      store.add({ source: 's', markdown: 'x', ownerPid: 100 });
-      store.add({ source: 's', markdown: 'y', ownerPid: 100 });
-      store.add({ source: 's', markdown: 'z', ownerPid: 200 });
-      expect(store.size()).toBe(3);
-      expect(store.countByOwnerPid(100)).toBe(2);
-      expect(store.countByOwnerPid(200)).toBe(1);
-      expect(store.countByOwnerPid(999)).toBe(0);
-    });
+  it('emits updated with the patched doc', () => {
+    const store = new Store();
+    store.upsert(makeInput());
+    const events = capture(store);
 
-    it('reports hasInstance only for ids actually stored', () => {
-      const store = new Store();
-      store.add({ source: 's', markdown: 'x', instanceId: 'here' });
-      expect(store.hasInstance('here')).toBe(true);
-      expect(store.hasInstance('missing')).toBe(false);
-    });
+    store.updateIfPresent('/docs/plan.md', { markdown: 'v2' });
+
+    expect(events).toEqual([{ kind: 'updated', doc: expect.objectContaining({ markdown: 'v2' }) }]);
   });
 
-  describe('subscribe', () => {
-    it('emits added/updated/removed events', () => {
-      const store = new Store();
-      const listener = vi.fn();
-      store.subscribe(listener);
+  it('returns null for a missing key', () => {
+    const store = new Store();
 
-      const { doc } = store.add({ source: 's', markdown: 'x' });
-      store.update(doc.id, { markdown: 'y' });
-      store.remove(doc.id);
+    expect(store.updateIfPresent('/missing.md', { markdown: 'v2' })).toBeNull();
+  });
 
-      expect(listener.mock.calls.map((c) => c[0].kind)).toEqual(['added', 'updated', 'removed']);
-    });
+  it('does not create a doc or emit for a missing key', () => {
+    const store = new Store();
+    const events = capture(store);
 
-    it('stops notifying after unsubscribe', () => {
-      const store = new Store();
-      const listener = vi.fn();
-      const unsubscribe = store.subscribe(listener);
+    store.updateIfPresent('/missing.md', { markdown: 'v2' });
 
-      store.add({ source: 's', markdown: 'x' });
-      unsubscribe();
-      store.add({ source: 's2', markdown: 'y' });
+    expect(store.size()).toBe(0);
+    expect(events).toEqual([]);
+  });
+});
 
-      expect(listener).toHaveBeenCalledTimes(1);
-    });
+describe('remove', () => {
+  it('deletes the doc and returns true', () => {
+    const store = new Store();
+    store.upsert(makeInput());
+
+    const removed = store.remove('/docs/plan.md');
+
+    expect(removed).toBe(true);
+    expect(store.get('/docs/plan.md')).toBeNull();
+  });
+
+  it('emits removed with the key', () => {
+    const store = new Store();
+    store.upsert(makeInput());
+    const events = capture(store);
+
+    store.remove('/docs/plan.md');
+
+    expect(events).toEqual([{ kind: 'removed', key: '/docs/plan.md' }]);
+  });
+
+  it('returns false and emits nothing for a missing key', () => {
+    const store = new Store();
+    const events = capture(store);
+
+    const removed = store.remove('/missing.md');
+
+    expect(removed).toBe(false);
+    expect(events).toEqual([]);
+  });
+});
+
+describe('list', () => {
+  it('returns an empty array for an empty store', () => {
+    const store = new Store();
+
+    expect(store.list()).toEqual([]);
+  });
+
+  it('returns every stored doc', () => {
+    const store = new Store();
+    store.upsert(makeInput({ key: '/a.md', label: 'a.md' }));
+    store.upsert(makeInput({ key: '/b.md', label: 'b.md' }));
+
+    expect(store.list().map((doc) => doc.key)).toEqual(['/a.md', '/b.md']);
+  });
+});
+
+describe('get', () => {
+  it('returns the doc for a known key', () => {
+    const store = new Store();
+    store.upsert(makeInput());
+
+    expect(store.get('/docs/plan.md')?.label).toBe('plan.md');
+  });
+
+  it('returns null for an unknown key', () => {
+    const store = new Store();
+
+    expect(store.get('/missing.md')).toBeNull();
+  });
+});
+
+describe('size', () => {
+  it('tracks adds and removes', () => {
+    const store = new Store();
+    expect(store.size()).toBe(0);
+
+    store.upsert(makeInput({ key: '/a.md' }));
+    store.upsert(makeInput({ key: '/b.md' }));
+    expect(store.size()).toBe(2);
+
+    store.remove('/a.md');
+    expect(store.size()).toBe(1);
+  });
+});
+
+describe('subscribe', () => {
+  it('delivers each event to every subscriber', () => {
+    const store = new Store();
+    const first = capture(store);
+    const second = capture(store);
+
+    store.upsert(makeInput());
+
+    expect(first).toHaveLength(1);
+    expect(second).toHaveLength(1);
+  });
+
+  it('stops delivering events after unsubscribe', () => {
+    const store = new Store();
+    const events: StoreEvent[] = [];
+    const unsubscribe = store.subscribe((event) => events.push(event));
+
+    unsubscribe();
+    store.upsert(makeInput());
+
+    expect(events).toEqual([]);
   });
 });

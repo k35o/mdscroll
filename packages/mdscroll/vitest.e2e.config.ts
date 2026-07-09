@@ -8,7 +8,7 @@ export default defineConfig({
   test: {
     include: ['src/e2e.test.ts'],
     exclude: defaultExclude,
-    // One scenario waits 5s for the liveness GC tick; raise the per-test cap.
+    // Tests spawn real subprocesses and wait on renderer warmup; raise the per-test cap.
     testTimeout: 30_000,
   },
 });

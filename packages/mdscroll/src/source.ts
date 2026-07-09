@@ -4,50 +4,59 @@ export const UNTITLED = '(untitled)';
 
 /**
  * Return a display string that uses forward slashes as separators
- * regardless of platform. The browser tab strip and SSE payloads split
- * on `/` to derive a basename; if we leave Windows-native `\` in the
- * label the basename split is a no-op and tabs show the full path.
+ * regardless of platform. The browser tab strip splits on `/` to derive
+ * a basename; if we leave Windows-native `\` in the label the basename
+ * split is a no-op and tabs show the full path.
  */
 const toForwardSlashes = (p: string): string => (sep === '/' ? p : p.split(sep).join('/'));
 
 /**
- * Label shown in the header when a file path was given on the CLI.
- * Prefer cwd-relative so `mdscroll plan.md` shows `plan.md`, while
- * `mdscroll docs/plan.md` keeps the subdirectory. An absolute path that
- * is not under cwd would render with `../..` prefixes, which is fine —
- * it's still short and unambiguous.
- *
- * The path is always emitted with `/` separators so the browser-side
- * basename logic and the length-based truncation in `displaySourceLabel`
- * work identically on Windows.
+ * Display label for a file doc. Prefer cwd-relative so `mdscroll plan.md`
+ * shows `plan.md` and `mdscroll docs/plan.md` keeps the subdirectory.
+ * Files outside cwd fall back to the basename — a `../../..` chain is
+ * noise, and the full path (the doc key) is always available in `ls`
+ * and the tab tooltip.
  */
 export const fileSourceLabel = (file: string): string => {
   const absolute = resolve(file);
   const rel = relative(process.cwd(), absolute);
-  return toForwardSlashes(rel.length > 0 ? rel : basename(absolute));
+  if (rel.length === 0) return basename(absolute);
+  if (rel.startsWith('..')) return basename(absolute);
+  return toForwardSlashes(rel);
 };
 
 /**
- * Label shown in the header for stdin mode. The first ATX `# H1` line in
- * the document wins; otherwise we fall back to UNTITLED. We intentionally
- * don't support setext headings (`===` underline) — ATX is what AI
- * agents produce, and keeping the rule strict avoids weird matches
- * inside code blocks.
+ * Display label for stdin mode. The first ATX `# H1` line outside a fenced
+ * code block wins; otherwise UNTITLED. Skipping fences matters because a
+ * doc that opens with a shell/python block would otherwise take a `# comment`
+ * line as its title. Setext headings (`===` underline) are unsupported —
+ * ATX is what AI agents produce. Used for the label only; stdin doc identity
+ * comes from `--name` (or the fixed `untitled` key).
  */
 export const stdinSourceLabel = (markdown: string): string => {
-  const match = markdown.match(/^#\s+(.+?)\s*$/m);
-  const title = match?.[1]?.trim();
-  return title && title.length > 0 ? title : UNTITLED;
+  let fence: string | null = null;
+  for (const line of markdown.split('\n')) {
+    const fenceMatch = line.match(/^\s*(```+|~~~+)/);
+    if (fence !== null) {
+      if (fenceMatch && line.trim().startsWith(fence)) fence = null;
+      continue;
+    }
+    if (fenceMatch) {
+      fence = fenceMatch[1]!.slice(0, 3);
+      continue;
+    }
+    const heading = line.match(/^#\s+(.+?)\s*$/);
+    const title = heading?.[1]?.trim();
+    if (title && title.length > 0) return title;
+  }
+  return UNTITLED;
 };
 
 /**
- * Clip a long source label from the left so the end (typically the
- * filename) stays visible — `…T/mdscroll-live/plan.md`.
- *
- * We do this at render time rather than relying on CSS `text-overflow:
- * ellipsis`, which always anchors the ellipsis on the right. The
- * RTL + plaintext CSS hack is fragile across browsers; truncating the
- * string up-front is unambiguous.
+ * Clip a long label from the left so the end (typically the filename)
+ * stays visible — `…T/mdscroll-live/plan.md`. Done at render time rather
+ * than with CSS `text-overflow`, which always anchors the ellipsis on
+ * the right.
  */
 const MAX_DISPLAY_LEN = 60;
 export const displaySourceLabel = (source: string): string => {

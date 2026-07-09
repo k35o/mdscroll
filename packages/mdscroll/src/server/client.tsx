@@ -25,8 +25,7 @@ export const Document: FC = () => (
         <main class="mdscroll-main">
           <article id="mdscroll-content" class="markdown-body" aria-live="polite" />
           <p class="mdscroll-empty" id="mdscroll-empty" hidden>
-            No documents yet. Run <code>mdscroll &lt;file&gt;</code> in another terminal to push one
-            here.
+            No documents yet. Run <code>mdscroll &lt;file&gt;</code> in a terminal to push one here.
           </p>
         </main>
       </div>
@@ -46,6 +45,7 @@ export const STYLES_CSS = `:root {
   --accent: #0969da;
   --status-idle: #59636e;
   --status-live: #1a7f37;
+  --status-stale: #9a6700;
   --color-note: #0969da;
   --color-tip: #1a7f37;
   --color-warning: #9a6700;
@@ -63,6 +63,7 @@ export const STYLES_CSS = `:root {
     --accent: #4493f8;
     --status-idle: #9198a1;
     --status-live: #3fb950;
+    --status-stale: #d29922;
     --color-note: #2f81f7;
     --color-tip: #3fb950;
     --color-warning: #d29922;
@@ -86,7 +87,7 @@ body {
 }
 .mdscroll-shell-header {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 16px;
   padding: 20px 0 0;
   border-bottom: 1px solid var(--border-mute);
@@ -98,7 +99,9 @@ body {
   color: var(--fg-mute);
   font-size: 14px;
   flex-shrink: 0;
-  padding-bottom: 20px;
+  /* Sit on the same baseline as the tab labels: tab padding-bottom (10px)
+     plus its 2px underline. */
+  padding-bottom: 12px;
 }
 .mdscroll-tabs {
   flex: 1 1 auto;
@@ -112,7 +115,7 @@ body {
   flex: 0 1 auto;
   min-width: 0;
   max-width: 240px;
-  padding: 8px 12px 10px;
+  padding: 8px 8px 10px 12px;
   background: transparent;
   border: 0;
   border-bottom: 2px solid transparent;
@@ -122,9 +125,9 @@ body {
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
   display: inline-flex;
   align-items: center;
+  user-select: none;
 }
 .mdscroll-tab:hover { color: var(--fg); }
 .mdscroll-tab[aria-selected="true"] {
@@ -140,9 +143,28 @@ body {
   background: var(--status-live);
   flex-shrink: 0;
 }
-.mdscroll-tab > span:last-child {
+.mdscroll-tab .mdscroll-tab-dot[data-stale="true"] {
+  background: var(--status-stale);
+}
+.mdscroll-tab .mdscroll-tab-label {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.mdscroll-tab-close {
+  flex-shrink: 0;
+  margin-left: 6px;
+  padding: 0 4px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: var(--fg-mute);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+.mdscroll-tab-close:hover {
+  color: var(--fg);
+  background: var(--bg-raised);
 }
 .mdscroll-status {
   flex-shrink: 0;
@@ -151,7 +173,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding-bottom: 20px;
+  padding-bottom: 12px;
 }
 .mdscroll-status::before {
   content: "";
@@ -319,7 +341,14 @@ const loadMermaid = () => {
     mermaidPromise = import(MERMAID_CDN).then((mod) => {
       const mermaid = mod.default;
       const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      mermaid.initialize({ startOnLoad: false, theme: isDark ? 'dark' : 'default' });
+      // securityLevel 'strict' is mermaid's default, but the rendered SVG
+      // is mounted via innerHTML below, so pin it explicitly: diagram
+      // source is untrusted doc content.
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        theme: isDark ? 'dark' : 'default',
+      });
       return mermaid;
     });
   }
@@ -370,18 +399,45 @@ const scrollToBottom = () => {
 };
 
 // ---- State ----
-/** Map<id, { id, source, displaySource, html }> */
+/** Map<key, { key, label, display, kind, watched, stale, html }> */
 const docs = new Map();
-let activeId = null;
+let activeKey = null;
 
-const applyContent = (html, { stick }) => {
+const keyFromHash = () => {
+  const raw = window.location.hash.slice(1);
+  if (!raw) return null;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+};
+
+const writeHash = (key) => {
+  const hash = key === null ? '' : '#' + encodeURIComponent(key);
+  history.replaceState(null, '', window.location.pathname + hash);
+};
+
+const updateTitle = () => {
+  const doc = activeKey === null ? null : docs.get(activeKey);
+  document.title = doc ? doc.display + ' — mdscroll' : 'mdscroll';
+};
+
+// Content swap policy:
+// - 'reset'    — a different doc became active; start at the top.
+// - 'preserve' — same doc re-rendered (update / SSE re-init); keep the
+//   reading position unless tail-follow engages.
+const applyContent = (html, scroll) => {
   if (!contentEl) return;
-  const shouldStick = stick && isNearBottom();
+  const stick = scroll === 'preserve' && isNearBottom();
+  const prevY = window.scrollY;
   contentEl.innerHTML = html;
-  if (shouldStick) scrollToBottom();
+  if (scroll === 'reset') window.scrollTo({ top: 0 });
+  else if (stick) scrollToBottom();
+  else window.scrollTo({ top: prevY });
   void (async () => {
     await renderMermaid(contentEl);
-    if (shouldStick) scrollToBottom();
+    if (stick) scrollToBottom();
   })();
 };
 
@@ -390,72 +446,104 @@ const renderEmpty = () => {
   if (emptyEl) emptyEl.hidden = false;
 };
 
-const renderActive = ({ stick }) => {
-  if (!activeId) {
-    renderEmpty();
-    return;
-  }
-  const doc = docs.get(activeId);
+const renderActive = (scroll) => {
+  updateTitle();
+  const doc = activeKey === null ? null : docs.get(activeKey);
   if (!doc) {
     renderEmpty();
     return;
   }
   if (emptyEl) emptyEl.hidden = true;
-  applyContent(doc.html, { stick });
+  applyContent(doc.html, scroll);
+};
+
+const selectDoc = (key, scroll) => {
+  activeKey = key;
+  writeHash(key);
+  renderTabs();
+  renderActive(scroll);
+};
+
+const closeDoc = (key) => {
+  // Fire-and-forget; the authoritative 'removed' event comes back over
+  // SSE and updates the UI for every connected viewer at once.
+  fetch('/_/docs/' + encodeURIComponent(key), { method: 'DELETE' }).catch((err) => {
+    console.warn('mdscroll: failed to close doc', err);
+  });
 };
 
 const renderTabs = () => {
   if (!tabsEl) return;
   tabsEl.innerHTML = '';
   for (const doc of docs.values()) {
-    const tab = document.createElement('button');
-    tab.type = 'button';
+    const tab = document.createElement('div');
     tab.className = 'mdscroll-tab';
     tab.setAttribute('role', 'tab');
-    tab.setAttribute('aria-selected', doc.id === activeId ? 'true' : 'false');
-    tab.dataset.id = doc.id;
-    tab.title = doc.source;
-    // Dot indicates liveness; reserved for future per-tab state.
+    tab.setAttribute('tabindex', '0');
+    tab.setAttribute('aria-selected', doc.key === activeKey ? 'true' : 'false');
+    tab.dataset.key = doc.key;
+    tab.title = doc.key;
     const dot = document.createElement('span');
     dot.className = 'mdscroll-tab-dot';
+    if (doc.stale) dot.dataset.stale = 'true';
     tab.appendChild(dot);
     const label = document.createElement('span');
-    // Tabs get the basename only; the full path is on the tooltip.
-    // displaySource may contain slashes (e.g. "docs/plan.md") or a
-    // truncated path ("…ser/plan.md") — split on '/' either way.
-    const parts = (doc.displaySource || doc.source || '').split('/');
-    label.textContent = parts[parts.length - 1] || doc.displaySource;
+    label.className = 'mdscroll-tab-label';
+    // Tabs get the basename only; the full key is on the tooltip. The
+    // display label may contain slashes ("docs/plan.md") or be a
+    // truncated path — split on '/' either way.
+    const parts = (doc.display || doc.label || '').split('/');
+    label.textContent = parts[parts.length - 1] || doc.display;
     tab.appendChild(label);
-    tab.addEventListener('click', () => {
-      if (activeId === doc.id) return;
-      activeId = doc.id;
-      renderTabs();
-      renderActive({ stick: false });
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'mdscroll-tab-close';
+    close.setAttribute('aria-label', 'Close ' + doc.label);
+    close.textContent = '\\u00d7';
+    close.addEventListener('click', (event) => {
+      event.stopPropagation();
+      closeDoc(doc.key);
+    });
+    tab.appendChild(close);
+    const select = () => {
+      if (activeKey !== doc.key) selectDoc(doc.key, 'reset');
+    };
+    tab.addEventListener('click', select);
+    tab.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        select();
+      }
     });
     tabsEl.appendChild(tab);
   }
 };
 
-const upsertDoc = (doc) => {
-  const existed = docs.has(doc.id);
-  docs.set(doc.id, doc);
-  if (!activeId) activeId = doc.id;
-  renderTabs();
-  if (doc.id === activeId) {
-    // On update of the currently visible doc, preserve tail-follow.
-    renderActive({ stick: existed });
+const upsertDoc = (doc, { activate }) => {
+  docs.set(doc.key, doc);
+  if (activate || activeKey === null) {
+    selectDoc(doc.key, activeKey === doc.key ? 'preserve' : 'reset');
+    return;
   }
+  renderTabs();
+  if (doc.key === activeKey) renderActive('preserve');
 };
 
-const removeDoc = (id) => {
-  if (!docs.has(id)) return;
-  docs.delete(id);
-  if (activeId === id) {
-    const next = docs.keys().next();
-    activeId = next.done ? null : next.value;
+const removeDoc = (key) => {
+  if (!docs.has(key)) return;
+  const wasActive = activeKey === key;
+  docs.delete(key);
+  if (!wasActive) {
+    // A background tab closed: the reader's active doc is untouched, so
+    // leave its scroll position alone — only the tab strip changes.
+    renderTabs();
+    return;
   }
+  const next = docs.keys().next();
+  activeKey = next.done ? null : next.value;
+  writeHash(activeKey);
   renderTabs();
-  renderActive({ stick: false });
+  renderActive('reset');
 };
 
 const stream = new EventSource('/events');
@@ -464,15 +552,26 @@ stream.addEventListener('error', () => setStatus('idle', 'reconnecting'));
 stream.addEventListener('init', (event) => {
   try {
     const payload = JSON.parse(event.data);
+    const previous = activeKey;
     docs.clear();
-    activeId = null;
     for (const doc of payload.docs || []) {
-      docs.set(doc.id, doc);
+      docs.set(doc.key, doc);
     }
-    const first = docs.keys().next();
-    activeId = first.done ? null : first.value;
+    // Keep the tab the reader was on across reconnects; fall back to
+    // the URL fragment (per-doc links), then to the first doc.
+    let next = previous !== null && docs.has(previous) ? previous : null;
+    if (next === null) {
+      const fromHash = keyFromHash();
+      if (fromHash !== null && docs.has(fromHash)) next = fromHash;
+    }
+    if (next === null) {
+      const first = docs.keys().next();
+      next = first.done ? null : first.value;
+    }
+    activeKey = next;
+    writeHash(activeKey);
     renderTabs();
-    renderActive({ stick: false });
+    renderActive(previous !== null && previous === activeKey ? 'preserve' : 'reset');
   } catch (err) {
     console.warn('mdscroll: bad init payload', err);
   }
@@ -480,7 +579,8 @@ stream.addEventListener('init', (event) => {
 stream.addEventListener('added', (event) => {
   try {
     const payload = JSON.parse(event.data);
-    upsertDoc(payload.doc);
+    // A freshly pushed doc is what the pusher wants seen: activate it.
+    upsertDoc(payload.doc, { activate: true });
   } catch (err) {
     console.warn('mdscroll: bad added payload', err);
   }
@@ -488,7 +588,7 @@ stream.addEventListener('added', (event) => {
 stream.addEventListener('updated', (event) => {
   try {
     const payload = JSON.parse(event.data);
-    upsertDoc(payload.doc);
+    upsertDoc(payload.doc, { activate: false });
   } catch (err) {
     console.warn('mdscroll: bad updated payload', err);
   }
@@ -496,9 +596,17 @@ stream.addEventListener('updated', (event) => {
 stream.addEventListener('removed', (event) => {
   try {
     const payload = JSON.parse(event.data);
-    removeDoc(payload.id);
+    removeDoc(payload.key);
   } catch (err) {
     console.warn('mdscroll: bad removed payload', err);
   }
+});
+
+// Pasting a doc URL (/#<key>) into an already-open tab, or using back/forward
+// between docs, must switch tabs — the fragment is only consulted on init
+// otherwise.
+window.addEventListener('hashchange', () => {
+  const key = keyFromHash();
+  if (key !== null && key !== activeKey && docs.has(key)) selectDoc(key, 'reset');
 });
 `;

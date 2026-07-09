@@ -77,12 +77,20 @@ const buildRenderer = (highlighter: Highlighter): MarkdownIt => {
   return md;
 };
 
+let rendererPromise: Promise<MarkdownIt> | null = null;
+
+const getRenderer = (): Promise<MarkdownIt> => {
+  if (!rendererPromise) {
+    rendererPromise = getHighlighter().then(buildRenderer);
+  }
+  return rendererPromise;
+};
+
 export const render = async (markdown: string): Promise<string> => {
-  const highlighter = await getHighlighter();
-  const md = buildRenderer(highlighter);
+  const md = await getRenderer();
   return md.render(markdown);
 };
 
 export const warmup = async (): Promise<void> => {
-  await getHighlighter();
+  await getRenderer();
 };

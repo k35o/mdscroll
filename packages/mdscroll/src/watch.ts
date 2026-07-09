@@ -21,10 +21,17 @@ const DEBOUNCE_MS = 100;
  *   to run for the lifetime of the server and we'd rather log and
  *   continue than crash on a transient ENOENT during a save window.
  */
-export const watchFile = (file: string, onChange: () => void | Promise<void>): WatchHandle => {
+export const watchFile = (
+  file: string,
+  onChange: () => void | Promise<void>,
+  opts?: { onError?: () => void },
+): WatchHandle => {
   const absolute = resolve(file);
   const dir = dirname(absolute);
-  const base = basename(absolute);
+  // Compare in NFC: macOS FSEvents can report a save on a decomposed-Unicode
+  // filename (e.g. 'café.md') in NFD even when the path we hold is NFC, so a
+  // raw string compare would discard every event for non-ASCII names.
+  const base = basename(absolute).normalize('NFC');
 
   let timer: NodeJS.Timeout | null = null;
   let closed = false;
@@ -48,7 +55,7 @@ export const watchFile = (file: string, onChange: () => void | Promise<void>): W
     // mounts). We can't tell whether the event was for our file, so we
     // fall through and let the onChange re-read settle it — a wasted
     // read is cheaper than silently dropping every update.
-    if (filename !== null && filename !== base) return;
+    if (filename !== null && filename.normalize('NFC') !== base) return;
     if (timer) clearTimeout(timer);
     timer = setTimeout(fire, DEBOUNCE_MS);
   });
@@ -60,6 +67,7 @@ export const watchFile = (file: string, onChange: () => void | Promise<void>): W
   // HTTP server and last-known content are still useful to the user.
   watcher.on('error', (err) => {
     process.stderr.write(`mdscroll: watcher error: ${String(err)}\n`);
+    opts?.onError?.();
   });
 
   return {
