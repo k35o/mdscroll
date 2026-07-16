@@ -6,7 +6,7 @@ catalog:
   '@changesets/cli': 2.31.0
   '@hono/node-server': 2.0.8
   '@types/markdown-it': 14.1.2
-  '@types/node': 24.13.2
+  '@types/node': 24.13.3
   commander: 15.0.0
   hono: 4.12.27
   markdown-it: 14.3.0
