@@ -8,7 +8,7 @@ catalog:
   '@types/markdown-it': 14.1.2
   '@types/node': 24.13.2
   commander: 15.0.0
-  hono: 4.12.27
+  hono: 4.12.28
   markdown-it: 14.3.0
   markdown-it-github-alerts: 1.0.1
   markdown-it-task-lists: 2.1.1
