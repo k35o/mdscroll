@@ -25,8 +25,8 @@ catalogs:
       specifier: 15.0.0
       version: 15.0.0
     hono:
-      specifier: 4.12.28
-      version: 4.12.28
+      specifier: 4.12.29
+      version: 4.12.29
     markdown-it:
       specifier: 14.3.0
       version: 14.3.0
@@ -79,13 +79,13 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 'catalog:'
-        version: 2.0.8(hono@4.12.28)
+        version: 2.0.8(hono@4.12.29)
       commander:
         specifier: 'catalog:'
         version: 15.0.0
       hono:
         specifier: 'catalog:'
-        version: 4.12.28
+        version: 4.12.29
       markdown-it:
         specifier: 'catalog:'
         version: 14.3.0
@@ -1197,8 +1197,8 @@ packages:
   hast-util-whitespace@3.0.0:
     resolution: {integrity: sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw==}
 
-  hono@4.12.28:
-    resolution: {integrity: sha512-YwUvVpSF7m1yOblFPrU3Hbo8XhPheBoiyfGuII6z19LnOr6JpDnyyp7LFNrfV56wS8tpvtBFGRISHN02pDdLOA==}
+  hono@4.12.29:
+    resolution: {integrity: sha512-1hNiRjawYrLq/4m3DQQjPGFg0VZkk4RjQJDff/excI6Dm9BiL75qxGrd7/c6YOxPdq6AscP3LiXhQ6fKFC1Waw==}
     engines: {node: '>=16.9.0'}
 
   html-void-elements@3.0.0:
@@ -2067,9 +2067,9 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@hono/node-server@2.0.8(hono@4.12.28)':
+  '@hono/node-server@2.0.8(hono@4.12.29)':
     dependencies:
-      hono: 4.12.28
+      hono: 4.12.29
 
   '@inquirer/external-editor@1.0.3(@types/node@24.13.3)':
     dependencies:
@@ -2778,7 +2778,7 @@ snapshots:
     dependencies:
       '@types/hast': 3.0.4
 
-  hono@4.12.28: {}
+  hono@4.12.29: {}
 
   html-void-elements@3.0.0: {}
 
