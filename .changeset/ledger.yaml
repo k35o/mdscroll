@@ -1,0 +1,4 @@
+mdscroll@0.4.1:
+  dir: packages/mdscroll
+  intents:
+    - switch-release-automation
