@@ -164,35 +164,24 @@ Notes:
 
 ## Release
 
-Versioning and publishing use [Changesets](https://github.com/changesets/changesets). The default path is CI-driven via `.github/workflows/release.yml`.
+Versioning and publishing use [pnpm's built-in release management](https://pnpm.io/versioning) (pnpm >= 11.13), driven in CI by [k35o/pnpm-release-action](https://github.com/k35o/pnpm-release-action) via `.github/workflows/release.yml`.
 
 ### Authoring a change
 
 ```bash
-pnpm changeset        # interactive; writes .changeset/<name>.md describing the change
+pnpm change           # interactive; writes .changeset/<name>.md (changesets-format intent)
 git add .changeset/*  # include it in the PR
 ```
 
 ### CI-driven publish (normal path)
 
-On every push to `main`, `changesets/action` runs. It does one of two things:
+On every push to `main` the action does one of two things:
 
-1. If there are pending `.changeset/*.md` files → it opens or updates a `Version Packages` PR that bumps `package.json` versions and updates `CHANGELOG.md`.
-2. If that PR has been merged (no pending changesets, but versions differ from what is on npm) → it runs `pnpm release` (build + `changeset publish`) and pushes the new version to npm.
+1. Pending `.changeset/*.md` intents → it opens or updates the `chore: prepare release` PR (branch `pnpm-release/main`) that bumps versions and updates `CHANGELOG.md`.
+2. No pending intents → it builds, runs the built-in `pnpm publish -r`, pushes the `mdscroll@<version>` tag, and creates the GitHub Release from the changelog.
 
-Publishing uses npm OIDC (trusted publishing). The workflow requests `id-token: write` — no `NPM_TOKEN` secret is needed. The trusted publisher must be configured on npmjs.com for the `mdscroll` package, bound to the GitHub repo and the `Release` workflow.
-
-### First publish (manual)
-
-OIDC trusted publishing requires the package to exist on npm before the CI path works. For the very first release:
-
-```bash
-npm login
-pnpm release         # builds + changeset publish (runs locally)
-```
-
-Then configure the trusted publisher on npmjs.com → `mdscroll` package → "Trusted publisher" → GitHub Actions → repo `k35o/mdscroll`, workflow `release.yml`, environment (blank).
+Publishing uses npm OIDC (trusted publishing). The workflow requests `id-token: write` — no `NPM_TOKEN` secret is needed. The trusted publisher on npmjs.com stays bound to repo `k35o/mdscroll`, workflow `release.yml`.
 
 ### Config
 
-`.changeset/config.json` uses `@changesets/changelog-github` (repo `k35o/mdscroll`) and `access: public`. Baseline branch is `main`.
+The `versioning` key in `pnpm-workspace.yaml` (`changelog.storage: repository` keeps `CHANGELOG.md` committed). Consumed intents are recorded in `.changeset/ledger.yaml`; both are committed by the release PR.

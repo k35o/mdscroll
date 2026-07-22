@@ -16,14 +16,9 @@
     "typecheck": "vp run -r typecheck",
     "check": "vp check",
     "check:write": "vp check --fix",
-    "skill:validate": "skills-ref validate skills/mdscroll",
-    "changeset": "changeset",
-    "version": "changeset version",
-    "release": "pnpm build && changeset publish"
+    "skill:validate": "skills-ref validate skills/mdscroll"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "catalog:",
-    "@changesets/cli": "catalog:",
     "@types/node": "catalog:",
     "skills-ref": "catalog:",
     "typescript": "catalog:",
@@ -32,5 +27,5 @@
   "engines": {
     "node": ">=24.13.0"
   },
-  "packageManager": "pnpm@11.5.3"
+  "packageManager": "pnpm@11.15.1"
 }
