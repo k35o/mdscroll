@@ -2,8 +2,6 @@ packages:
   - packages/*
 
 catalog:
-  '@changesets/changelog-github': 0.7.0
-  '@changesets/cli': 2.31.0
   '@hono/node-server': 2.0.8
   '@types/markdown-it': 14.1.2
   '@types/node': 24.13.3
@@ -21,3 +19,7 @@ catalog:
 blockExoticSubdeps: true
 minimumReleaseAge: 10080
 verifyDepsBeforeRun: install
+
+versioning:
+  changelog:
+    storage: repository

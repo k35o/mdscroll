@@ -26,14 +26,6 @@
     {
       "matchPackageNames": ["/^markdown-it/", "/^@types/markdown-it$/"],
       "groupName": "markdown-it dependencies"
-    },
-    {
-      "matchPackageNames": ["/^@changesets/"],
-      "groupName": "changesets dependencies"
-    },
-    {
-      "matchPackageNames": ["changesets/action"],
-      "enabled": false
     }
   ]
 }
