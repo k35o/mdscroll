@@ -19,8 +19,8 @@ catalogs:
       specifier: 15.0.0
       version: 15.0.0
     hono:
-      specifier: 4.12.29
-      version: 4.12.29
+      specifier: 4.12.30
+      version: 4.12.30
     markdown-it:
       specifier: 14.3.0
       version: 14.3.0
@@ -67,13 +67,13 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: 'catalog:'
-        version: 2.0.8(hono@4.12.29)
+        version: 2.0.8(hono@4.12.30)
       commander:
         specifier: 'catalog:'
         version: 15.0.0
       hono:
         specifier: 'catalog:'
-        version: 4.12.29
+        version: 4.12.30
       markdown-it:
         specifier: 'catalog:'
         version: 14.3.0
@@ -1007,8 +1007,8 @@ packages:
   hast-util-whitespace@3.0.0:
     resolution: {integrity: sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw==}
 
-  hono@4.12.29:
-    resolution: {integrity: sha512-1hNiRjawYrLq/4m3DQQjPGFg0VZkk4RjQJDff/excI6Dm9BiL75qxGrd7/c6YOxPdq6AscP3LiXhQ6fKFC1Waw==}
+  hono@4.12.30:
+    resolution: {integrity: sha512-emn+JoJjrN9YTpRDS5it/UI2SO9BAE37T6I3d963RxcZ81G9A4pr2SZTEiiaiKbzx+NKRg5BZ89fCL7gCJCUog==}
     engines: {node: '>=16.9.0'}
 
   html-void-elements@3.0.0:
@@ -1513,9 +1513,9 @@ snapshots:
       tslib: 2.8.1
     optional: true
 
-  '@hono/node-server@2.0.8(hono@4.12.29)':
+  '@hono/node-server@2.0.8(hono@4.12.30)':
     dependencies:
-      hono: 4.12.29
+      hono: 4.12.30
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
@@ -2096,7 +2096,7 @@ snapshots:
     dependencies:
       '@types/hast': 3.0.4
 
-  hono@4.12.29: {}
+  hono@4.12.30: {}
 
   html-void-elements@3.0.0: {}
 
