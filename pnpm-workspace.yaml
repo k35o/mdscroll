@@ -10,10 +10,10 @@ catalog:
   markdown-it: 14.3.0
   markdown-it-github-alerts: 1.0.1
   markdown-it-task-lists: 2.1.1
-  shiki: 4.3.0
+  shiki: 4.3.1
   skills-ref: 0.1.5
   typescript: 7.0.2
-  vite-plus: 0.2.2
+  vite-plus: 0.2.5
   vitest: 4.1.10
 
 blockExoticSubdeps: true
