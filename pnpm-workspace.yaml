@@ -7,7 +7,7 @@ catalog:
   '@types/node': 24.13.3
   commander: 15.0.0
   hono: 4.13.1
-  markdown-it: 14.3.0
+  markdown-it: 15.0.0
   markdown-it-github-alerts: 1.0.1
   markdown-it-task-lists: 2.1.1
   shiki: 4.4.2
