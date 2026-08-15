@@ -1,4 +1,4 @@
-import MarkdownIt from 'markdown-it';
+import MarkdownIt, { type MarkdownIt as MarkdownItInstance } from 'markdown-it';
 import alertsPlugin from 'markdown-it-github-alerts';
 import taskListsPlugin from 'markdown-it-task-lists';
 import { createHighlighter, type Highlighter } from 'shiki';
@@ -37,7 +37,7 @@ const getHighlighter = (): Promise<Highlighter> => {
   return highlighterPromise;
 };
 
-const buildRenderer = (highlighter: Highlighter): MarkdownIt => {
+const buildRenderer = (highlighter: Highlighter): MarkdownItInstance => {
   const md = new MarkdownIt({
     html: false,
     linkify: true,
@@ -77,9 +77,9 @@ const buildRenderer = (highlighter: Highlighter): MarkdownIt => {
   return md;
 };
 
-let rendererPromise: Promise<MarkdownIt> | null = null;
+let rendererPromise: Promise<MarkdownItInstance> | null = null;
 
-const getRenderer = (): Promise<MarkdownIt> => {
+const getRenderer = (): Promise<MarkdownItInstance> => {
   if (!rendererPromise) {
     rendererPromise = getHighlighter().then(buildRenderer);
   }
