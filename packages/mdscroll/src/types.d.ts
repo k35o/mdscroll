@@ -1,5 +1,5 @@
 declare module 'markdown-it-task-lists' {
-  import type { PluginWithOptions } from 'markdown-it';
+  import type { MarkdownIt } from 'markdown-it';
 
   type Options = {
     enabled?: boolean;
@@ -7,6 +7,6 @@ declare module 'markdown-it-task-lists' {
     labelAfter?: boolean;
   };
 
-  const plugin: PluginWithOptions<Options>;
+  const plugin: (md: MarkdownIt, options?: Options) => void;
   export default plugin;
 }

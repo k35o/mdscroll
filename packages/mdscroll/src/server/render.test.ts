@@ -61,6 +61,19 @@ describe('render', () => {
       expect(html).toContain('<a href="https://example.com">https://example.com</a>');
     });
 
+    it('leaves scheme-less URLs as plain text', async () => {
+      // linkify-it 6 (markdown-it 15) dropped fuzzy links from the defaults.
+      const html = await render('Visit www.example.com now');
+      expect(html).not.toContain('<a href');
+      expect(html).toContain('Visit www.example.com now');
+    });
+
+    it('ends a linkified URL at CJK punctuation', async () => {
+      const html = await render('詳細はhttps://example.com。続きます');
+      expect(html).toContain('<a href="https://example.com">https://example.com</a>');
+      expect(html).toContain('</a>。続きます');
+    });
+
     it('renders ![alt](src) as <img>', async () => {
       const html = await render('![logo](/a.png)');
       expect(html).toContain('<img src="/a.png" alt="logo">');
