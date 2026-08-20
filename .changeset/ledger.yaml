@@ -2,3 +2,7 @@ mdscroll@0.4.1:
   dir: packages/mdscroll
   intents:
     - switch-release-automation
+mdscroll@0.4.2:
+  dir: packages/mdscroll
+  intents:
+    - markdown-it-15
