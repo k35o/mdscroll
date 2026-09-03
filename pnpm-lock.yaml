@@ -19,8 +19,8 @@ catalogs:
       specifier: 4.13.1
       version: 4.13.1
     markdown-it:
-      specifier: 15.0.0
-      version: 15.0.0
+      specifier: 15.0.1
+      version: 15.0.1
     markdown-it-github-alerts:
       specifier: 1.0.1
       version: 1.0.1
@@ -73,10 +73,10 @@ importers:
         version: 4.13.1
       markdown-it:
         specifier: 'catalog:'
-        version: 15.0.0
+        version: 15.0.1
       markdown-it-github-alerts:
         specifier: 'catalog:'
-        version: 1.0.1(markdown-it@15.0.0)
+        version: 1.0.1(markdown-it@15.0.1)
       markdown-it-task-lists:
         specifier: 'catalog:'
         version: 2.1.1
@@ -1170,8 +1170,8 @@ packages:
   markdown-it-task-lists@2.1.1:
     resolution: {integrity: sha512-TxFAc76Jnhb2OUu+n3yz9RMu4CwGfaT788br6HhEDlvWfdeJcLUsxk1Hgw2yJio0OXsxv7pyIPmvECY7bMbluA==}
 
-  markdown-it@15.0.0:
-    resolution: {integrity: sha512-Lf8ajvVNdRpzSNB4VegxNy7gjs8gU35l4b4+ET49LrQC5PKYwLZ72u60LeJ9gv3qiaesuYjJWCyVeQmv/QWKQw==}
+  markdown-it@15.0.1:
+    resolution: {integrity: sha512-9/7gE95FNPkfUWrjJIoHZza2iLmuJlPD0UNMxPi7bxUrbCR525YZY0r+zyfes0dZI5ZZ/uNIXUJca0pJvtw41g==}
     hasBin: true
 
   mdast-util-to-hast@13.2.1:
@@ -2178,13 +2178,13 @@ snapshots:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  markdown-it-github-alerts@1.0.1(markdown-it@15.0.0):
+  markdown-it-github-alerts@1.0.1(markdown-it@15.0.1):
     dependencies:
-      markdown-it: 15.0.0
+      markdown-it: 15.0.1
 
   markdown-it-task-lists@2.1.1: {}
 
-  markdown-it@15.0.0:
+  markdown-it@15.0.1:
     dependencies:
       argparse: 3.0.0
       entities: 8.0.0
