@@ -13,7 +13,7 @@ catalog:
   skills-ref: 0.1.5
   typescript: 7.0.2
   vite-plus: 0.3.0
-  vitest: 4.1.11
+  vitest: 5.0.0
 
 blockExoticSubdeps: true
 minimumReleaseAge: 10080
