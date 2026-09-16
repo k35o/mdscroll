@@ -3,7 +3,7 @@ packages:
 
 catalog:
   '@hono/node-server': 2.1.1
-  '@types/node': 24.13.3
+  '@types/node': 24.13.4
   commander: 15.0.0
   hono: 4.13.5
   markdown-it: 15.0.1
